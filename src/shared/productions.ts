@@ -151,13 +151,51 @@ export type ProductionArtifactView = z.infer<
   typeof productionArtifactViewSchema
 >;
 
+export const productionOutputDecisions = ["APPROVED", "REJECTED"] as const;
+export const productionOutputDecisionSchema = z
+  .object({
+    decision: z.enum(productionOutputDecisions),
+    reason: z.string().trim().min(1).optional(),
+    decidedAt: z.iso.datetime(),
+  })
+  .readonly();
+export type ProductionOutputDecision = z.infer<
+  typeof productionOutputDecisionSchema
+>;
+
+export const recordOutputDecisionRequestSchema = z
+  .object({
+    decision: z.enum(productionOutputDecisions),
+    reason: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict()
+  .refine(
+    (request) =>
+      request.decision === "REJECTED" || request.reason === undefined,
+    { message: "Approval records no rejection note." },
+  )
+  .readonly();
+export type RecordOutputDecisionRequest = z.infer<
+  typeof recordOutputDecisionRequestSchema
+>;
+
 export const productionDetailResponseSchema = z
   .object({
     production: productionViewSchema,
     stages: z.array(productionStageViewSchema),
     artifacts: z.array(productionArtifactViewSchema),
+    outputDecision: productionOutputDecisionSchema.optional(),
   })
   .readonly();
 export type ProductionDetailResponse = z.infer<
   typeof productionDetailResponseSchema
+>;
+
+export const listProductionsResponseSchema = z
+  .object({
+    productions: z.array(productionDetailResponseSchema),
+  })
+  .readonly();
+export type ListProductionsResponse = z.infer<
+  typeof listProductionsResponseSchema
 >;
