@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 
 import { ProductionTransitionError } from "@/domain/production";
 import { ArtifactStoreError } from "@/lib/artifact-store";
+import { ProviderCredentialsError } from "@/server/productions/provider-credentials";
 import { MediaUploadError } from "@/lib/upload-validation";
 
 import type { ProductionApiErrorCode } from "@/shared/productions";
@@ -142,6 +143,14 @@ export function productionErrorResult(
       code: error.code,
       message: gateErrorMessages[error.code],
       status: gateErrorStatuses[error.code],
+    };
+  }
+  if (error instanceof ProviderCredentialsError) {
+    return {
+      code: error.code,
+      message:
+        "The selected provider requires settings that are not configured. Configure them or select the mock provider.",
+      status: 400,
     };
   }
   if (error instanceof ProductionTransitionError) {

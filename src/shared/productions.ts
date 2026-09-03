@@ -46,6 +46,7 @@ export const productionApiErrorCodes = [
   "UPLOAD_TOO_LARGE",
   "INVALID_MEDIA_CONTENT",
   "PRODUCTION_ALREADY_ACTIVE",
+  "PROVIDER_CREDENTIALS_REQUIRED",
   "INTERNAL_ERROR",
 ] as const;
 export type ProductionApiErrorCode = (typeof productionApiErrorCodes)[number];
@@ -128,6 +129,11 @@ export const productionStageViewSchema = z
     errorCode: z.string().trim().min(1).optional(),
     safeErrorMessage: z.string().trim().min(1).optional(),
     workerLeaseOwner: z.string().trim().min(1).optional(),
+    /**
+     * Live-provider request lineage for reconcile-before-retry and
+     * attribution display; absent for local/mock stages.
+     */
+    providerRequestId: z.string().trim().min(1).optional(),
   })
   .readonly();
 export type ProductionStageView = z.infer<typeof productionStageViewSchema>;
@@ -137,6 +143,8 @@ export const productionArtifactViewSchema = z
     id: z.string().trim().min(1),
     kind: z.enum(artifactKinds),
     provider: z.enum(artifactProviders),
+    /** Provider request lineage when a live provider produced this artifact. */
+    providerRequestId: z.string().trim().min(1).optional(),
     mimeType: z.string().trim().min(1),
     byteSize: z.number().int().nonnegative(),
     sha256: z.string().regex(/^[a-f0-9]{64}$/, "SHA-256 digests are 64 hex"),

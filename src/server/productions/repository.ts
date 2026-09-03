@@ -92,6 +92,7 @@ const stageViewColumns = {
   errorCode: productionStages.errorCode,
   safeErrorMessage: productionStages.safeErrorMessage,
   workerLeaseOwner: productionStages.workerLeaseOwner,
+  providerRequestId: productionStages.providerRequestId,
 };
 
 export function createProductionRepository(database: Database) {
@@ -164,11 +165,13 @@ export function createProductionRepository(database: Database) {
         errorCode: stage.errorCode ?? undefined,
         safeErrorMessage: stage.safeErrorMessage ?? undefined,
         workerLeaseOwner: stage.workerLeaseOwner ?? undefined,
+        providerRequestId: stage.providerRequestId ?? undefined,
       })),
       artifacts: artifactRows.map((artifact) => ({
         id: artifact.id,
         kind: artifact.kind,
         provider: artifact.provider,
+        providerRequestId: artifact.providerRequestId ?? undefined,
         mimeType: artifact.mimeType,
         byteSize: artifact.byteSize,
         sha256: artifact.sha256,

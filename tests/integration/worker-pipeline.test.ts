@@ -8,7 +8,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { beforeAll, afterEach, describe, expect, it } from "vitest";
+import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { candidateFixtures } from "../../fixtures/candidates";
 import {
@@ -30,6 +30,7 @@ import {
   type PipelineStageName,
   type StageExecutor,
 } from "../../src/server/productions/pipeline";
+import type { ImageProvider } from "../../src/lib/providers";
 import { createProductionRepository } from "../../src/server/productions/repository";
 import { createProductionWorkerRepository } from "../../src/server/productions/worker-repository";
 import {
@@ -129,6 +130,7 @@ function createHarness(): Harness {
 async function seedAndQueue(
   harness: Harness,
   animationProvider: "MOCK" | "RUNWAY" = "MOCK",
+  imageProvider: ImageProvider = "MOCK",
 ): Promise<string> {
   harness.candidates.seed(candidateFixtures, "2026-09-03T12:00:00.000Z");
   const candidateId = candidateFixtures[0]!.id;
@@ -142,7 +144,7 @@ async function seedAndQueue(
   const id = harness.productions.createDraft({
     candidateId,
     segment: SEGMENT,
-    imageProvider: "MOCK",
+    imageProvider,
     animationProvider,
     now: NOW,
   });
@@ -502,37 +504,54 @@ describe("worker media pipeline", () => {
     expect(failedStage.errorCode).toBe("PROVIDER_UNKNOWN_OUTCOME");
   });
 
-  it("selects the Runway animation executor only for RUNWAY productions", () => {
+  it("selects live executors only for jobs persisted with live selections", () => {
     const defaults = createDefaultStageExecutors();
-    const runwayExecutor: StageExecutor = async () => ({ artifacts: [] });
-    const createRunway = () => runwayExecutor;
+    const liveExecutor: StageExecutor = async () => ({ artifacts: [] });
+    const factories = {
+      createOpenAIImageExecutor: () => liveExecutor,
+      createRunwayAnimationExecutor: () => liveExecutor,
+    };
 
     expect(
       selectDefaultStageExecutor(
         "ANIMATE_IMAGE",
-        "RUNWAY",
+        { imageProvider: "MOCK", animationProvider: "RUNWAY" },
         defaults,
-        createRunway,
+        factories,
       ),
-    ).toBe(runwayExecutor);
-    // MOCK productions never touch the Runway factory.
+    ).toBe(liveExecutor);
+    // MOCK productions never touch the live factories.
     expect(
-      selectDefaultStageExecutor("ANIMATE_IMAGE", "MOCK", defaults, () => {
-        throw new Error("must not construct a Runway executor");
-      }),
+      selectDefaultStageExecutor(
+        "ANIMATE_IMAGE",
+        {
+          imageProvider: "MOCK",
+          animationProvider: "MOCK",
+        },
+        defaults,
+        {
+          createRunwayAnimationExecutor: () => {
+            throw new Error("must not construct a Runway executor");
+          },
+        },
+      ),
     ).toBe(defaults.ANIMATE_IMAGE);
-    // Other stages always use the defaults.
+    // Other stages always use the defaults, even under live selections.
     expect(
       selectDefaultStageExecutor(
         "STYLE_IMAGE",
-        "RUNWAY",
+        { imageProvider: "MOCK", animationProvider: "RUNWAY" },
         defaults,
-        createRunway,
+        factories,
       ),
     ).toBe(defaults.STYLE_IMAGE);
-    // A RUNWAY production with no executor configured fails fast.
+    // A live selection with no executor configured fails fast.
     expect(() =>
-      selectDefaultStageExecutor("ANIMATE_IMAGE", "RUNWAY", defaults),
+      selectDefaultStageExecutor(
+        "ANIMATE_IMAGE",
+        { imageProvider: "MOCK", animationProvider: "RUNWAY" },
+        defaults,
+      ),
     ).toThrow(WorkerStageError);
   });
 
@@ -568,6 +587,264 @@ describe("worker media pipeline", () => {
         .where(eq(productions.id, id))
         .get()!;
       expect(stillFailed.status).toBe("FAILED");
+    },
+  );
+});
+
+describe("persisted provider combinations", () => {
+  // Real FFmpeg fixtures so downstream stages and validation exercise
+  // genuine media even though the live providers themselves are stubbed.
+  let styledPngBytes: Uint8Array;
+  let runwayVideoBytes: Uint8Array;
+
+  beforeAll(async () => {
+    const fixtureDirectory = await mkdtemp(
+      path.join(tmpdir(), "yardtoonz-provider-fixtures-"),
+    );
+    try {
+      const pngPath = path.join(fixtureDirectory, "styled.png");
+      await execFileAsync(mediaToolPaths.ffmpeg, [
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=360x640:rate=24",
+        "-frames:v",
+        "1",
+        pngPath,
+      ]);
+      styledPngBytes = new Uint8Array(await readFile(pngPath));
+
+      const videoPath = path.join(fixtureDirectory, "runway-out.mp4");
+      await execFileAsync(mediaToolPaths.ffmpeg, [
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=360x640:rate=24",
+        "-t",
+        "6",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        videoPath,
+      ]);
+      runwayVideoBytes = new Uint8Array(await readFile(videoPath));
+    } finally {
+      await rm(fixtureDirectory, { recursive: true, force: true });
+    }
+  });
+
+  afterEach(() => {
+    for (const key of [
+      "OPENAI_API_KEY",
+      "OPENAI_IMAGE_MODEL",
+      "RUNWAY_API_KEY",
+      "RUNWAY_MODEL",
+    ]) {
+      delete process.env[key];
+    }
+    vi.unstubAllGlobals();
+  });
+
+  const OPENAI_REQUEST_ID = "req_openai_e2e";
+  const RUNWAY_TASK_ID = "task_runway_e2e";
+
+  /** Stubs both live-provider endpoints so no test ever touches the network. */
+  function useLiveProviderEnv(): void {
+    process.env.OPENAI_API_KEY = "test-key-not-a-secret";
+    process.env.OPENAI_IMAGE_MODEL = "gpt-image-test";
+    process.env.RUNWAY_API_KEY = "test-key-not-a-secret";
+    process.env.RUNWAY_MODEL = "gen4-turbo-test";
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = String(input);
+        if (url.endsWith("/images/edits")) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  b64_json: Buffer.from(styledPngBytes).toString("base64"),
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "x-request-id": OPENAI_REQUEST_ID },
+            },
+          );
+        }
+        if (url === "https://api.dev.runwayml.com/v1/image_to_video") {
+          return new Response(
+            JSON.stringify({ id: RUNWAY_TASK_ID, estimatedCost: {} }),
+            { status: 200 },
+          );
+        }
+        if (url.startsWith("https://api.dev.runwayml.com/v1/tasks/")) {
+          return new Response(
+            JSON.stringify({
+              id: RUNWAY_TASK_ID,
+              status: "SUCCEEDED",
+              output: ["https://runway.test/output.mp4"],
+            }),
+            { status: 200 },
+          );
+        }
+        if (url === "https://runway.test/output.mp4") {
+          return new Response(new Uint8Array(runwayVideoBytes), {
+            status: 200,
+          });
+        }
+        throw new Error(`Unexpected provider fetch in test: ${url}`);
+      },
+    );
+  }
+
+  /** Asserts honest artifact + stage attribution and request lineage for a finished job. */
+  function expectAttribution(
+    harness: Harness,
+    id: string,
+    imageProvider: ImageProvider,
+    animationProvider: "MOCK" | "RUNWAY",
+  ): void {
+    const rows = artifactRows(harness, id);
+
+    const styled = rows.find((row) => row.kind === "STYLED_FRAME")!;
+    expect(styled.provider).toBe(imageProvider);
+    expect(styled.providerRequestId ?? null).toBe(
+      imageProvider === "OPENAI" ? OPENAI_REQUEST_ID : null,
+    );
+    expect(JSON.parse(styled.metadataJson)).toMatchObject({
+      styledBy: imageProvider,
+    });
+
+    const animation = rows.find((row) => row.kind === "SILENT_ANIMATION")!;
+    expect(animation.provider).toBe(animationProvider);
+    expect(animation.providerRequestId ?? null).toBe(
+      animationProvider === "RUNWAY" ? RUNWAY_TASK_ID : null,
+    );
+
+    // The API views surface the same lineage for attribution display.
+    const detail = harness.productions.getDetail(id)!;
+    const styledView = detail.artifacts.find(
+      (artifact) => artifact.kind === "STYLED_FRAME",
+    )!;
+    expect(styledView.providerRequestId).toBe(
+      imageProvider === "OPENAI" ? OPENAI_REQUEST_ID : undefined,
+    );
+    const animationView = detail.artifacts.find(
+      (artifact) => artifact.kind === "SILENT_ANIMATION",
+    )!;
+    expect(animationView.providerRequestId).toBe(
+      animationProvider === "RUNWAY" ? RUNWAY_TASK_ID : undefined,
+    );
+    const styleStage = detail.stages.find(
+      (stage) => stage.name === "STYLE_IMAGE",
+    )!;
+    expect(styleStage.providerRequestId).toBe(
+      imageProvider === "OPENAI" ? OPENAI_REQUEST_ID : undefined,
+    );
+    const animateStage = detail.stages.find(
+      (stage) => stage.name === "ANIMATE_IMAGE",
+    )!;
+    expect(animateStage.providerRequestId).toBe(
+      animationProvider === "RUNWAY" ? RUNWAY_TASK_ID : undefined,
+    );
+  }
+
+  it(
+    "completes MOCK/MOCK end to end with mock attribution",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "MOCK", "MOCK");
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expectAttribution(harness, id, "MOCK", "MOCK");
+    },
+  );
+
+  it(
+    "completes OPENAI/MOCK end to end through the live image adapter",
+    { timeout: 120_000 },
+    async () => {
+      useLiveProviderEnv();
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "MOCK", "OPENAI");
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expectAttribution(harness, id, "OPENAI", "MOCK");
+    },
+  );
+
+  it(
+    "completes MOCK/RUNWAY end to end through the Runway adapter",
+    { timeout: 120_000 },
+    async () => {
+      useLiveProviderEnv();
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "RUNWAY", "MOCK");
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expectAttribution(harness, id, "MOCK", "RUNWAY");
+    },
+  );
+
+  it(
+    "completes OPENAI/RUNWAY end to end through both live adapters",
+    { timeout: 120_000 },
+    async () => {
+      useLiveProviderEnv();
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "RUNWAY", "OPENAI");
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expectAttribution(harness, id, "OPENAI", "RUNWAY");
+    },
+  );
+
+  it(
+    "fails the STYLE_IMAGE stage cleanly when OPENAI is selected without credentials",
+    { timeout: 60_000 },
+    async () => {
+      // The environment intentionally lacks OPENAI_* settings.
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "MOCK", "OPENAI");
+
+      await runUntil(harness, id, "FAILED");
+
+      const job = harness.database
+        .select({
+          status: productions.status,
+          errorCode: productions.errorCode,
+        })
+        .from(productions)
+        .where(eq(productions.id, id))
+        .get()!;
+      expect(job.status).toBe("FAILED");
+      expect(job.errorCode).toBe("PROVIDER_REQUEST_FAILED");
+
+      const styleStage = harness.database
+        .select({
+          name: productionStages.name,
+          status: productionStages.status,
+        })
+        .from(productionStages)
+        .where(eq(productionStages.productionId, id))
+        .all()
+        .find((stage) => stage.name === "STYLE_IMAGE")!;
+      expect(styleStage.status).toBe("FAILED");
+
+      // The mock executors never ran: no styled frame exists to recover.
+      expect(
+        artifactRows(harness, id).some((row) => row.kind === "STYLED_FRAME"),
+      ).toBe(false);
     },
   );
 });
