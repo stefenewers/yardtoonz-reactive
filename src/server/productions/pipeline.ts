@@ -14,7 +14,9 @@ import {
   generateArtifactStorageKey,
   type ArtifactStore,
 } from "@/lib/artifact-store";
+import { env } from "@/lib/env";
 import { mediaToolPaths } from "@/lib/media-tools";
+import type { ImageProvider } from "@/lib/providers";
 import { productionStageNames } from "@/server/db/schema";
 
 const execFileAsync = promisify(execFile);
@@ -209,7 +211,8 @@ export function getArtifactStorageKey(
 export type WorkerStageErrorCode =
   | "UPSTREAM_ARTIFACT_MISSING"
   | "MEDIA_PROCESSING_FAILED"
-  | "OUTPUT_VALIDATION_FAILED";
+  | "OUTPUT_VALIDATION_FAILED"
+  | "IMAGE_PROVIDER_NOT_AVAILABLE";
 
 /** Typed stage failure carrying the stable error code persisted for retry. */
 export class WorkerStageError extends Error {
@@ -663,16 +666,33 @@ async function validateFinalOutput(
   };
 }
 
-export function createDefaultStageExecutors(): Record<
-  PipelineStageName,
-  StageExecutor
-> {
+export interface DefaultStageExecutorSelection {
+  /** Defaults to the validated environment selection. */
+  readonly imageProvider?: ImageProvider;
+}
+
+export function createDefaultStageExecutors(
+  selection: DefaultStageExecutorSelection = {},
+): Record<PipelineStageName, StageExecutor> {
+  const imageProvider = selection.imageProvider ?? env.IMAGE_PROVIDER;
   return {
     EXTRACT_MEDIA: (context) =>
       executeProductionStage("EXTRACT_MEDIA", context),
     SELECT_KEYFRAME: (context) =>
       executeProductionStage("SELECT_KEYFRAME", context),
-    STYLE_IMAGE: (context) => executeProductionStage("STYLE_IMAGE", context),
+    STYLE_IMAGE: async (context) => {
+      // The default executor only produces the mock FFmpeg style. Running it
+      // under a live provider selection would mislabel mock output as
+      // provider-produced (expectedArtifactProvider maps STYLED_FRAME to the
+      // job's imageProvider), so fail fast instead of attributing dishonestly.
+      if (imageProvider !== "MOCK") {
+        throw new WorkerStageError(
+          "IMAGE_PROVIDER_NOT_AVAILABLE",
+          `IMAGE_PROVIDER=${imageProvider} is selected but no live image style executor is wired for the STYLE_IMAGE stage; set IMAGE_PROVIDER=MOCK or wire the OpenAI image adapter executor.`,
+        );
+      }
+      return executeProductionStage("STYLE_IMAGE", context);
+    },
     ANIMATE_IMAGE: (context) =>
       executeProductionStage("ANIMATE_IMAGE", context),
     MUX_AND_NORMALIZE: (context) =>
