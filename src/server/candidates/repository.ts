@@ -3,7 +3,7 @@ import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { randomUUID } from "node:crypto";
 
 import { scoreCandidate } from "@/domain/scoring";
-import type { CandidateFixture } from "@/../fixtures/candidates";
+import type { CandidateIntakeRecord } from "@/shared/candidate-intake";
 import {
   candidateSchema,
   candidateScoresSchema,
@@ -23,6 +23,11 @@ import type * as schema from "../db/schema";
 
 type Database = BetterSQLite3Database<typeof schema>;
 type CandidateRow = typeof candidates.$inferSelect;
+/** Records reach persistence only after intake assigned every id. */
+type PersistableCandidateRecord = CandidateIntakeRecord & { id: string };
+type CandidateTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
 
 function parseCandidate(
   row: CandidateRow,
@@ -48,26 +53,55 @@ function parseCandidate(
   });
 }
 
-function serializeFixture(fixture: CandidateFixture, now: string) {
-  const scores = scoreCandidate(fixture);
+function serializeCandidateRecord(
+  record: PersistableCandidateRecord,
+  now: string,
+) {
+  const scores = scoreCandidate(record);
   return {
-    id: fixture.id,
-    platform: fixture.platform,
-    sourceUrl: fixture.sourceUrl,
-    sourceLabel: fixture.sourceLabel,
-    caption: fixture.caption,
-    publishedAt: fixture.publishedAt,
-    observedAt: fixture.observedAt,
-    metricsJson: JSON.stringify(fixture.metrics),
-    adaptationNote: fixture.adaptationNote,
+    id: record.id,
+    platform: record.platform,
+    sourceUrl: record.sourceUrl,
+    sourceLabel: record.sourceLabel,
+    caption: record.caption,
+    publishedAt: record.publishedAt,
+    observedAt: record.observedAt,
+    metricsJson: JSON.stringify(record.metrics),
+    adaptationNote: record.adaptationNote,
     fitChecklistJson: JSON.stringify(
-      fitChecklistSchema.parse(fixture.fitChecklist),
+      fitChecklistSchema.parse(record.fitChecklist),
     ),
     scoresJson: JSON.stringify(scores),
     status: "NEW" as const,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+function insertCandidateRecords(
+  database: CandidateTransaction,
+  records: readonly PersistableCandidateRecord[],
+  now: string,
+): number {
+  for (const record of records) {
+    database
+      .insert(candidates)
+      .values(serializeCandidateRecord(record, now))
+      .run();
+    if (record.commentExcerpts.length > 0) {
+      database
+        .insert(candidateComments)
+        .values(
+          record.commentExcerpts.map((excerpt, position) => ({
+            candidateId: record.id,
+            position,
+            excerpt,
+          })),
+        )
+        .run();
+    }
+  }
+  return records.length;
 }
 
 export function createCandidateRepository(database: Database) {
@@ -91,7 +125,7 @@ export function createCandidateRepository(database: Database) {
   }
 
   return {
-    seed(fixtures: readonly CandidateFixture[], now: string): number {
+    seed(records: readonly PersistableCandidateRecord[], now: string): number {
       return database.transaction((transaction) => {
         const existing = transaction
           .select({ id: candidates.id })
@@ -99,26 +133,17 @@ export function createCandidateRepository(database: Database) {
           .get();
         if (existing) return 0;
 
-        for (const fixture of fixtures) {
-          transaction
-            .insert(candidates)
-            .values(serializeFixture(fixture, now))
-            .run();
-          if (fixture.commentExcerpts.length > 0) {
-            transaction
-              .insert(candidateComments)
-              .values(
-                fixture.commentExcerpts.map((excerpt, position) => ({
-                  candidateId: fixture.id,
-                  position,
-                  excerpt,
-                })),
-              )
-              .run();
-          }
-        }
-        return fixtures.length;
+        return insertCandidateRecords(transaction, records, now);
       });
+    },
+
+    importIntake(
+      records: readonly PersistableCandidateRecord[],
+      now: string,
+    ): number {
+      return database.transaction((transaction) =>
+        insertCandidateRecords(transaction, records, now),
+      );
     },
 
     list(): Candidate[] {
@@ -202,3 +227,5 @@ export function createCandidateRepository(database: Database) {
     },
   };
 }
+
+export type CandidateRepository = ReturnType<typeof createCandidateRepository>;
