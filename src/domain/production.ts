@@ -175,7 +175,10 @@ const nextWorkerStatus: Record<WorkerOwnedStatus, ProductionStatus> = {
   VALIDATING: "COMPLETE",
 };
 
-const producedKinds: Record<WorkerOwnedStatus, readonly ArtifactKind[]> = {
+export const phaseOutputKinds: Record<
+  WorkerOwnedStatus,
+  readonly ArtifactKind[]
+> = {
   EXTRACTING: ["SOURCE_VIDEO", "EXTRACTED_CLIP", "EXTRACTED_AUDIO", "KEYFRAME"],
   STYLING: ["STYLED_FRAME"],
   ANIMATING: ["SILENT_ANIMATION"],
@@ -183,23 +186,23 @@ const producedKinds: Record<WorkerOwnedStatus, readonly ArtifactKind[]> = {
   VALIDATING: [],
 };
 
-const requiredUpstreamKinds: Record<
+export const phaseRequiredUpstreamKinds: Record<
   WorkerOwnedStatus,
   readonly ArtifactKind[]
 > = {
   EXTRACTING: [],
-  STYLING: producedKinds.EXTRACTING,
-  ANIMATING: [...producedKinds.EXTRACTING, ...producedKinds.STYLING],
+  STYLING: phaseOutputKinds.EXTRACTING,
+  ANIMATING: [...phaseOutputKinds.EXTRACTING, ...phaseOutputKinds.STYLING],
   MUXING: [
-    ...producedKinds.EXTRACTING,
-    ...producedKinds.STYLING,
-    ...producedKinds.ANIMATING,
+    ...phaseOutputKinds.EXTRACTING,
+    ...phaseOutputKinds.STYLING,
+    ...phaseOutputKinds.ANIMATING,
   ],
   VALIDATING: [
-    ...producedKinds.EXTRACTING,
-    ...producedKinds.STYLING,
-    ...producedKinds.ANIMATING,
-    ...producedKinds.MUXING,
+    ...phaseOutputKinds.EXTRACTING,
+    ...phaseOutputKinds.STYLING,
+    ...phaseOutputKinds.ANIMATING,
+    ...phaseOutputKinds.MUXING,
   ],
 };
 
@@ -283,7 +286,7 @@ function requireProducedArtifacts(
   status: WorkerOwnedStatus,
   artifacts: readonly ProductionArtifactRecord[],
 ): void {
-  const expectedKinds = producedKinds[status];
+  const expectedKinds = phaseOutputKinds[status];
   const actualKinds = artifacts.map((artifact) => artifact.kind);
   const hasExactStageOutputs =
     actualKinds.length === expectedKinds.length &&
@@ -325,7 +328,7 @@ function retryFailedStage(
   }
 
   const verifiedIds = new Set(transition.verifiedUpstreamArtifactIds);
-  const upstreamKinds = requiredUpstreamKinds[job.failedStage];
+  const upstreamKinds = phaseRequiredUpstreamKinds[job.failedStage];
   const hasAllUpstreamArtifacts = upstreamKinds.every((kind) =>
     job.artifacts.some(
       (artifact) => artifact.kind === kind && verifiedIds.has(artifact.id),

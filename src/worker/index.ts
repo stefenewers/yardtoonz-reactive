@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import { parseServerEnvironment } from "../lib/env-schema";
+import { createLocalArtifactStore } from "../lib/artifact-store";
 import { createLogger } from "../lib/logger";
 import { getMediaToolHealth } from "../lib/media-tools";
 import { openDatabase } from "../server/db/client";
 import { recordWorkerHeartbeat } from "../server/db/heartbeats";
 import { probeArtifactRoot } from "../server/health/artifact-root";
+import { runWorkerTick } from "./runner";
 
 const logger = createLogger();
 
@@ -54,6 +56,8 @@ async function runWorker(): Promise<void> {
     );
   }
 
+  const store = createLocalArtifactStore();
+
   const heartbeat = (): void => {
     try {
       recordWorkerHeartbeat(database.database, {
@@ -71,9 +75,37 @@ async function runWorker(): Promise<void> {
 
   heartbeat();
 
-  const pollInterval = setInterval(heartbeat, environment.WORKER_POLL_MS);
+  // One tick at a time per worker; heartbeats keep flowing on the interval
+  // even while a long FFmpeg stage runs, so health stays accurate.
+  let tickRunning = false;
+  let stopped = false;
+  const tick = (): void => {
+    if (tickRunning || stopped) return;
+    tickRunning = true;
+    void runWorkerTick({
+      database: database.database,
+      store,
+      options: { workerId },
+    })
+      .catch((error: unknown) => {
+        logger.error("Worker poll tick crashed", {
+          workerId,
+          errorCode: "WORKER_TICK_FAILED",
+          errorDetail: getErrorMessage(error),
+        });
+      })
+      .finally(() => {
+        tickRunning = false;
+      });
+  };
+
+  const pollInterval = setInterval(() => {
+    heartbeat();
+    tick();
+  }, environment.WORKER_POLL_MS);
 
   const stop = (): void => {
+    stopped = true;
     clearInterval(pollInterval);
     logger.info("Worker stopped", { workerId });
     database.sqlite.close();
@@ -82,14 +114,11 @@ async function runWorker(): Promise<void> {
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
 
-  logger.info("Worker started; heartbeating on the poll interval", {
+  logger.info("Worker started; heartbeating and polling on the interval", {
     workerId,
   });
 }
 
-// The production engine lands in a later phase; until then the worker's
-// contract is to verify its dependencies and maintain the heartbeat the
-// health endpoint observes.
 runWorker().catch((error: unknown) => {
   logger.error("Worker crashed", {
     errorCode: "WORKER_CRASHED",
