@@ -35,8 +35,22 @@ export const candidateListSchema = z.array(candidateSchema);
 export type Candidate = z.infer<typeof candidateSchema>;
 export type ScoreEvidence = z.infer<typeof scoreEvidenceSchema>;
 
+export const candidateSortFields = [
+  "overall",
+  "viralMomentum",
+  "humorResponse",
+  "yardToonzFit",
+] as const;
+export type CandidateSortField = (typeof candidateSortFields)[number];
+export type CandidateSortOrder = "asc" | "desc";
+
+export interface CandidateListOptions {
+  sort?: CandidateSortField;
+  order?: CandidateSortOrder;
+}
+
 export interface CandidateReviewClient {
-  listCandidates(): Promise<Candidate[]>;
+  listCandidates(options?: CandidateListOptions): Promise<Candidate[]>;
   approveCandidate(candidateId: string): Promise<Candidate>;
   confirmRights(input: {
     candidateId: string;

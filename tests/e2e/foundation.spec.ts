@@ -11,9 +11,35 @@ test("candidate moves from inbox through approval and rights gate to upload", as
   await expect(page.getByText("Image provider")).toBeVisible();
   await expect(page.getByText("Animation provider")).toBeVisible();
   await expect(page.getByText("MOCK", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Mock mode")).toBeVisible();
+  await expect(page.getByText("Image · Mock")).toBeVisible();
+  await expect(page.getByText("Animation · Mock")).toBeVisible();
+  await expect(page.getByText("System ready")).toBeVisible();
 
   await page.getByRole("button", { name: "Load demo candidates" }).click();
   await expect(page.getByText("10 candidates")).toBeVisible();
+
+  const table = page.getByRole("table");
+  await expect(table).toBeVisible();
+  await expect(
+    table.getByRole("columnheader", { name: /Viral momentum/ }),
+  ).toBeVisible();
+  await expect(
+    table.getByRole("columnheader", { name: /Yard Toonz fit/ }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(".list-toolbar")
+      .getByText(/Overall = 40% viral momentum \+ 30% humor response/),
+  ).toBeVisible();
+
+  const humorHeader = table.getByRole("columnheader", {
+    name: /Humor response/,
+  });
+  await humorHeader.getByRole("button").click();
+  await expect(humorHeader).toHaveAttribute("aria-sort", "descending");
+  await humorHeader.getByRole("button").click();
+  await expect(humorHeader).toHaveAttribute("aria-sort", "ascending");
 
   await page
     .getByRole("button", {
@@ -25,9 +51,9 @@ test("candidate moves from inbox through approval and rights gate to upload", as
       name: "The bus finally arrives just as everybody gives up waiting.",
     }),
   ).toBeVisible();
-  await expect(page.getByText("Viral momentum")).toBeVisible();
-  await expect(page.getByText("Humor response")).toBeVisible();
-  await expect(page.getByText("Yard Toonz fit")).toBeVisible();
+  await expect(page.getByText("Viral momentum", { exact: true })).toBeVisible();
+  await expect(page.getByText("Humor response", { exact: true })).toBeVisible();
+  await expect(page.getByText("Yard Toonz fit", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Approve for production" }).click();
   await expect(

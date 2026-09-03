@@ -2,8 +2,10 @@ import {
   candidateListSchema,
   candidateSchema,
   type Candidate,
+  type CandidateListOptions,
   type CandidateReviewClient,
 } from "../domain/candidate";
+import { sortCandidates } from "../domain/inbox";
 import type { ZodType } from "zod";
 
 import {
@@ -166,8 +168,14 @@ export function createApiCandidateClient(
   candidateFetch: CandidateFetch = fetch,
 ): CandidateReviewClient {
   return {
-    async listCandidates() {
-      const response = await candidateFetch("/api/candidates");
+    async listCandidates(options?: CandidateListOptions) {
+      const params = new URLSearchParams();
+      if (options?.sort) params.set("sort", options.sort);
+      if (options?.order) params.set("order", options.order);
+      const search = params.toString();
+      const response = await candidateFetch(
+        search ? `/api/candidates?${search}` : "/api/candidates",
+      );
       const { candidates } = await parseCandidateResponse(
         response,
         listCandidatesResponseSchema,
@@ -218,9 +226,9 @@ export function createMockCandidateClient(): CandidateReviewClient {
   let candidates = candidateListSchema.parse(seededCandidates);
 
   return {
-    async listCandidates() {
+    async listCandidates(options?: CandidateListOptions) {
       await wait();
-      return candidateListSchema.parse(candidates);
+      return candidateListSchema.parse(sortCandidates(candidates, options));
     },
     async approveCandidate(candidateId) {
       await wait(250);
