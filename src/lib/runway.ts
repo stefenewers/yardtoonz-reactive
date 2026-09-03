@@ -126,6 +126,16 @@ export interface RunwayTransport {
 const acceptedTaskSchema = taskSnapshotSchema;
 
 /**
+ * Live-verified create response: the API answers 200 with the task `id` and
+ * cost metadata — no `status` field at creation time — so creation parses a
+ * dedicated shape instead of the full task snapshot.
+ */
+const acceptedCreateSchema = z.object({
+  id: nonEmptyString,
+  estimatedCost: z.unknown().optional(),
+});
+
+/**
  * Error text reports the HTTP status only. Provider response bodies are
  * untrusted input and are never echoed into messages, logs, or persisted
  * stage errors — they can carry anything, including reflected credentials.
@@ -209,7 +219,7 @@ export function createHttpRunwayTransport(
           describeApiError(status),
         );
       }
-      const parsed = acceptedTaskSchema.safeParse(safeJson(body));
+      const parsed = acceptedCreateSchema.safeParse(safeJson(body));
       if (!parsed.success) {
         throw new RunwayAnimationError(
           "PROVIDER_UNKNOWN_OUTCOME",

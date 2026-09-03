@@ -79,7 +79,8 @@ describe("HTTP Runway transport", () => {
       };
       expect(body.model).toBe("test-model");
       expect(body.promptImage).toMatch(/^data:image\/png;base64,/);
-      return jsonResponse(201, { id: "task-42", status: "PENDING" });
+      // Live-verified creation response: id plus cost metadata, no status.
+      return jsonResponse(200, { id: "task-42", estimatedCost: { cost: 1 } });
     });
 
     const transport = createHttpRunwayTransport({
@@ -94,6 +95,24 @@ describe("HTTP Runway transport", () => {
     });
     expect(requestId).toBe("task-42");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a creation response without a task id", async () => {
+    const fetchImpl = stubFetch(() => jsonResponse(200, { estimatedCost: {} }));
+    const transport = createHttpRunwayTransport({
+      ...credentials,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const error = await transport
+      .createAnimationTask({
+        imageBytes: new Uint8Array([1]),
+        imageMimeType: "image/png",
+        model: "test-model",
+        durationSeconds: 6,
+      })
+      .catch((e) => e);
+    expect(error.code).toBe("PROVIDER_UNKNOWN_OUTCOME");
   });
 
   it("validates the task snapshot against the contract", async () => {
