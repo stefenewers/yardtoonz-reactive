@@ -1,12 +1,24 @@
+import { z } from "zod";
+
 import type {
   CandidateScores,
   EngagementMetrics,
   FitChecklist,
   ScoreEvidence,
 } from "@/shared/candidates";
-import { fitChecklistKeys } from "@/shared/candidates";
+import {
+  engagementMetricsSchema,
+  fitChecklistKeys,
+  fitChecklistSchema,
+} from "@/shared/candidates";
 
 export const SCORING_VERSION = "candidate-v1";
+
+export const scoringWeights = {
+  viralMomentum: 0.4,
+  humorResponse: 0.3,
+  yardToonzFit: 0.3,
+} as const;
 
 const metricCapsPerHour = {
   views: 50_000,
@@ -27,6 +39,45 @@ const laughPatterns = [
   /😂|🤣/u,
 ] as const;
 
+const scoreInputSchema = z.number().int().min(0).max(100);
+
+export const viralMomentumInputSchema = z
+  .object({
+    metrics: engagementMetricsSchema,
+    publishedAt: z.iso.datetime().optional(),
+    observedAt: z.iso.datetime(),
+  })
+  .refine(
+    ({ publishedAt, observedAt }) =>
+      publishedAt === undefined ||
+      new Date(publishedAt).getTime() <= new Date(observedAt).getTime(),
+    {
+      message: "publishedAt must not be after observedAt",
+      path: ["publishedAt"],
+    },
+  )
+  .readonly();
+
+export const humorResponseInputSchema = z
+  .array(z.string().trim().min(1))
+  .readonly();
+
+export const overallScoreInputSchema = z
+  .object({
+    viralMomentum: scoreInputSchema,
+    humorResponse: scoreInputSchema,
+    yardToonzFit: scoreInputSchema,
+  })
+  .readonly();
+
+export type ViralMomentumInput = z.infer<typeof viralMomentumInputSchema>;
+export type HumorResponseInput = z.infer<typeof humorResponseInputSchema>;
+export type OverallScoreInput = z.infer<typeof overallScoreInputSchema>;
+export interface CandidateScoringInput extends ViralMomentumInput {
+  commentExcerpts: HumorResponseInput;
+  fitChecklist: FitChecklist;
+}
+
 function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -43,12 +94,9 @@ function normalizeFeature(value: number, cap: number): number {
   return clampScore((Math.log1p(Math.min(value, cap)) / Math.log1p(cap)) * 100);
 }
 
-export function scoreViralMomentum(input: {
-  metrics: EngagementMetrics;
-  publishedAt?: string;
-  observedAt: string;
-}): ScoreEvidence {
-  const suppliedMetrics = Object.entries(input.metrics).filter(
+export function scoreViralMomentum(input: ViralMomentumInput): ScoreEvidence {
+  const validatedInput = viralMomentumInputSchema.parse(input);
+  const suppliedMetrics = Object.entries(validatedInput.metrics).filter(
     (entry): entry is [keyof EngagementMetrics, number] =>
       entry[1] !== undefined,
   );
@@ -62,8 +110,8 @@ export function scoreViralMomentum(input: {
     };
   }
 
-  const ageHours = input.publishedAt
-    ? hoursBetween(input.publishedAt, input.observedAt)
+  const ageHours = validatedInput.publishedAt
+    ? hoursBetween(validatedInput.publishedAt, validatedInput.observedAt)
     : undefined;
   const normalized = suppliedMetrics.map(([name, value]) => {
     const comparableValue = ageHours ? value / ageHours : value;
@@ -90,9 +138,10 @@ export function scoreViralMomentum(input: {
 }
 
 export function scoreHumorResponse(
-  commentExcerpts: readonly string[],
+  commentExcerpts: HumorResponseInput,
 ): ScoreEvidence {
-  if (commentExcerpts.length === 0) {
+  const validatedComments = humorResponseInputSchema.parse(commentExcerpts);
+  if (validatedComments.length === 0) {
     return {
       score: 0,
       explanation:
@@ -102,25 +151,26 @@ export function scoreHumorResponse(
   }
 
   const matchedPatterns = laughPatterns.filter((pattern) =>
-    commentExcerpts.some((comment) => pattern.test(comment)),
+    validatedComments.some((comment) => pattern.test(comment)),
   );
-  const commentsWithLaughter = commentExcerpts.filter((comment) =>
+  const commentsWithLaughter = validatedComments.filter((comment) =>
     laughPatterns.some((pattern) => pattern.test(comment)),
   ).length;
   const score = clampScore(
-    (commentsWithLaughter / commentExcerpts.length) * 70 +
+    (commentsWithLaughter / validatedComments.length) * 70 +
       Math.min(30, matchedPatterns.length * 6),
   );
 
   return {
     score,
-    explanation: `${commentsWithLaughter} of ${commentExcerpts.length} supplied comment excerpts contained configured laugh language or emojis; general positive sentiment was not counted.`,
-    inputsUsed: [`${commentExcerpts.length} comment excerpts`],
+    explanation: `${commentsWithLaughter} of ${validatedComments.length} supplied comment excerpts contained configured laugh language or emojis; general positive sentiment was not counted.`,
+    inputsUsed: [`${validatedComments.length} comment excerpts`],
   };
 }
 
 export function scoreYardToonzFit(checklist: FitChecklist): ScoreEvidence {
-  const passing = fitChecklistKeys.filter((key) => checklist[key]);
+  const validatedChecklist = fitChecklistSchema.parse(checklist);
+  const passing = fitChecklistKeys.filter((key) => validatedChecklist[key]);
   const score = clampScore((passing.length / fitChecklistKeys.length) * 100);
 
   return {
@@ -130,13 +180,16 @@ export function scoreYardToonzFit(checklist: FitChecklist): ScoreEvidence {
   };
 }
 
-export function scoreCandidate(input: {
-  metrics: EngagementMetrics;
-  publishedAt?: string;
-  observedAt: string;
-  commentExcerpts: readonly string[];
-  fitChecklist: FitChecklist;
-}): CandidateScores {
+export function scoreOverall(input: OverallScoreInput): number {
+  const scores = overallScoreInputSchema.parse(input);
+  return clampScore(
+    scores.viralMomentum * scoringWeights.viralMomentum +
+      scores.humorResponse * scoringWeights.humorResponse +
+      scores.yardToonzFit * scoringWeights.yardToonzFit,
+  );
+}
+
+export function scoreCandidate(input: CandidateScoringInput): CandidateScores {
   const viralMomentum = scoreViralMomentum(input);
   const humorResponse = scoreHumorResponse(input.commentExcerpts);
   const yardToonzFit = scoreYardToonzFit(input.fitChecklist);
@@ -145,11 +198,11 @@ export function scoreCandidate(input: {
     viralMomentum,
     humorResponse,
     yardToonzFit,
-    overall: clampScore(
-      viralMomentum.score * 0.4 +
-        humorResponse.score * 0.3 +
-        yardToonzFit.score * 0.3,
-    ),
+    overall: scoreOverall({
+      viralMomentum: viralMomentum.score,
+      humorResponse: humorResponse.score,
+      yardToonzFit: yardToonzFit.score,
+    }),
     scoringVersion: SCORING_VERSION,
   };
 }
