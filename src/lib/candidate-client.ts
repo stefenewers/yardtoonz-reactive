@@ -167,6 +167,22 @@ async function parseCandidateResponse<T>(
 export function createApiCandidateClient(
   candidateFetch: CandidateFetch = fetch,
 ): CandidateReviewClient {
+  async function patchCandidate(
+    candidateId: string,
+    body: Record<string, unknown>,
+  ) {
+    const response = await candidateFetch(`/api/candidates/${candidateId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const { candidate } = await parseCandidateResponse(
+      response,
+      approveCandidateResponseSchema,
+    );
+    return candidateSchema.parse(candidate);
+  }
+
   return {
     async listCandidates(options?: CandidateListOptions) {
       const params = new URLSearchParams();
@@ -183,16 +199,19 @@ export function createApiCandidateClient(
       return candidateListSchema.parse(candidates);
     },
     async approveCandidate(candidateId) {
-      const response = await candidateFetch(`/api/candidates/${candidateId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: "APPROVED" }),
-      });
-      const { candidate } = await parseCandidateResponse(
-        response,
-        approveCandidateResponseSchema,
+      return patchCandidate(candidateId, { status: "APPROVED" });
+    },
+    async rejectCandidate(candidateId, reason) {
+      const trimmed = reason?.trim();
+      return patchCandidate(
+        candidateId,
+        trimmed
+          ? { status: "REJECTED", reason: trimmed }
+          : { status: "REJECTED" },
       );
-      return candidateSchema.parse(candidate);
+    },
+    async restoreCandidate(candidateId) {
+      return patchCandidate(candidateId, { status: "NEW" });
     },
     async confirmRights({ candidateId, confirmationTextVersion }) {
       const response = await candidateFetch(
@@ -246,6 +265,52 @@ export function createMockCandidateClient(): CandidateReviewClient {
         item.id === candidateId ? approved : item,
       );
       return approved;
+    },
+    async rejectCandidate(candidateId, reason) {
+      await wait(250);
+      const candidate = candidates.find(({ id }) => id === candidateId);
+      if (!candidate)
+        throw new Error(
+          "Candidate could not be found. Reload the inbox and try again.",
+        );
+      // Mirrors the persisted repository: re-rejecting is an idempotent no-op.
+      if (candidate.status === "REJECTED") return candidate;
+      const rejected = candidateSchema.parse({
+        ...candidate,
+        status: "REJECTED",
+        decisionReason: reason?.trim() || undefined,
+        decidedAt: new Date().toISOString(),
+      });
+      candidates = candidates.map((item) =>
+        item.id === candidateId ? rejected : item,
+      );
+      return rejected;
+    },
+    async restoreCandidate(candidateId) {
+      await wait(250);
+      const candidate = candidates.find(({ id }) => id === candidateId);
+      if (!candidate)
+        throw new Error(
+          "Candidate could not be found. Reload the inbox and try again.",
+        );
+      // Mirrors the persisted repository: only a rejected candidate restores;
+      // an approved candidate keeps its approval because productions may
+      // already depend on it.
+      if (candidate.status === "APPROVED")
+        throw new Error(
+          "This editorial decision is not allowed for the candidate's current status.",
+        );
+      if (candidate.status === "NEW") return candidate;
+      const restored = candidateSchema.parse({
+        ...candidate,
+        status: "NEW",
+        decisionReason: undefined,
+        decidedAt: undefined,
+      });
+      candidates = candidates.map((item) =>
+        item.id === candidateId ? restored : item,
+      );
+      return restored;
     },
     async confirmRights({ candidateId }) {
       await wait(250);
