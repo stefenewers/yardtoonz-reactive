@@ -44,11 +44,24 @@ CI runs `npm run playwright:install` followed by the same `npm run check` comman
 
 The worker runs plain tsx outside the Next.js bundler, so `npm run worker` passes the `react-server` export condition explicitly. That resolves the `server-only` guard to its empty server implementation instead of throwing; pass the same flag when running worker entry points ad hoc.
 
+## Demo rehearsal
+
+`tests/e2e/demo-walkthrough.spec.ts` rehearses the three-minute demo path end to end against a production build: a seeded ten-candidate inbox, candidate approval, the rights-confirmation hard gate, a 6.3-second authorized fixture upload with 5–8 second segment validation, the complete mock pipeline driven by the real `npm run worker` process, seven-artifact lineage, persisted output approval, and a downloaded MP4 probed for 9:16 dimensions and an audio stream.
+
+Observed rehearsal behavior (2026-09-03, main):
+
+- The complete candidate-to-download walkthrough finishes in about ten seconds of wall time; the worker claims one stage per poll tick (`WORKER_POLL_MS`, default 1000 ms).
+- `npm run demo:reset` is safe while `npm run start` keeps serving: the API service singletons revalidate the SQLite file identity on every request and reopen — re-running migrations and fixture seeding — whenever the reset replaces the database file, so the UI never shows pre-reset rows after a mid-session reset.
+- Repeated reset-then-rehearse cycles produce identical deterministic results.
+- The fifteen-item final acceptance checklist in `docs/demo-runbook.md` was verified from these runs; the runbook records the observed evidence per item.
+
 ## Local persistence
 
 SQLite migrations create the six specification tables for candidates, comments, productions, stages, artifacts, and editorial decisions, plus the existing rights-confirmation hard gate and the operational `worker_heartbeats` table used by the health endpoint. Production timestamps use SQLite integer milliseconds internally, while the candidate API continues to expose UTC ISO timestamps.
 
-`npm run db:reset` removes only the configured database, SQLite sidecar files, and artifact directory when all paths resolve inside the application directory. It then applies every migration and loads the deterministic candidate fixtures. The command refuses in-memory databases, repository-root deletion, and paths outside the application directory.
+`npm run db:reset` (alias `npm run demo:reset`) removes only the configured database, SQLite sidecar files, and artifact directory when all paths resolve inside the application directory. It then applies every migration and loads the deterministic candidate fixtures. The command refuses in-memory databases, repository-root deletion, and paths outside the application directory.
+
+Long-lived web and worker processes stay correct across resets: the API service singletons hold their database connections through a file-identity provider that compares the SQLite file's device and inode on every request and reopens the database — migrations and fixture seeding included — whenever `db:reset` replaces the file. A reset during a running rehearsal therefore serves the fresh seed on the next request instead of the deleted file's snapshot (covered by `tests/integration/database-provider.test.ts`).
 
 ## Candidate intake
 
@@ -58,7 +71,7 @@ The CSV provider accepts a header row plus one row per candidate. Required colum
 
 ## Environment validation
 
-Server configuration is parsed by Zod in `src/lib/env-schema.ts` and loaded only through `src/lib/env.ts`. Invalid numeric values fail startup. Image and animation providers are selected independently, so mock/mock, OpenAI/mock, mock/Runway, and OpenAI/Runway configurations are representable. OpenAI settings are required only when `IMAGE_PROVIDER=OPENAI`; Runway settings are required only when `ANIMATION_PROVIDER=RUNWAY`. Live adapters remain intentionally outside this PR.
+Server configuration is parsed by Zod in `src/lib/env-schema.ts` and loaded only through `src/lib/env.ts`. Invalid numeric values fail startup. Image and animation providers are selected independently, so mock/mock, OpenAI/mock, mock/Runway, and OpenAI/Runway configurations are representable. OpenAI settings are required only when `IMAGE_PROVIDER=OPENAI`; Runway settings are required only when `ANIMATION_PROVIDER=RUNWAY`. The OpenAI and Runway adapters activate only when their provider is selected: an unselected adapter reports `{ selected: false }` without touching credentials, and a selected adapter fails fast with a configuration error when its key or model is missing, so the default credential-free mock configuration can never make a remote call.
 
 Validated stored-record contracts in `src/lib/production-records.ts` freeze both resolved selections onto each production job and require every artifact to name its actual producer (`USER_UPLOAD`, `FFMPEG`, `MOCK`, `OPENAI`, or `RUNWAY`). These contracts establish the persistence boundary for the later SQLite/Drizzle implementation without introducing live provider calls in the foundation.
 

@@ -3,8 +3,8 @@
 # YardToonz Reactive — Build and Demo Runbook
 
 **Status:** Draft for human approval  
-**Version:** 1.0  
-**Date:** 2026-09-03  
+**Version:** 1.1  
+**Date:** 2026-09-03 (v1.1 records observed behavior from the E6.3 mock-mode hardening and demo rehearsal on this date; sections 8, 9, 11, and 12 were reconciled with the implemented product)  
 **Event:** Obvious Frontier Build Atlanta  
 **Demo objective:** Produce one traceable, downloadable Yard Toonz cartoon from an approved candidate
 
@@ -190,34 +190,33 @@ Pause the initiative if the agent adds out-of-scope infrastructure, combines sev
 
 ## 8. Preflight checklist
 
-Run these checks before the first full demo. Commands are expected contracts; adjust only if the approved technical-spec PR records a different command.
+Observed commands (2026-09-03): FFmpeg and FFprobe ship as package-managed binaries, so there is no global `ffmpeg -version` step — `GET /api/health` reports their availability, and `npm run test:tools` probes them directly. Migrations and fixture seeding run automatically on first server boot and via the guarded reset.
 
 ```bash
 npm ci
-npm run db:migrate
-npm run seed
+npm run playwright:install
+npm run demo:reset
+npm run build
 npm run check
-ffmpeg -version
-ffprobe -version
 ```
 
 Start the required processes:
 
 ```bash
-npm run dev
-npm run worker
+npm run start   # production build on http://localhost:3000
+npm run worker  # heartbeats every WORKER_POLL_MS (default 1000 ms)
 ```
 
-Verify:
+Observed verification (all confirmed this date):
 
-- provider mode displays `Mock`;
-- health endpoint confirms database, artifact directory, FFmpeg, and worker heartbeat;
-- ten seeded candidates exist;
-- the demo source opens and contains an audio stream;
-- the artifact directory is writable;
-- no API credentials are required for the mock path.
+- health endpoint reports `status: "ok"` with `image: "MOCK"`, `animation: "MOCK"`, database `available`, artifact root `writable`, ffmpeg and ffprobe `available`, and worker heartbeat `fresh`;
+- ten seeded candidates load (`GET /api/candidates` returns 10);
+- no API credentials are required for the mock path (`.env.example` ships empty provider keys);
+- the demo source fixture opens, probes, and contains an audio stream (6.3 s, h264 + aac).
 
 ## 9. Three-minute demonstration script
+
+Observed UI labels and behavior (2026-09-03, mock mode): "Load demo candidates" seeds the inbox; the ranked table sorts by overall score; the candidate detail screen presents Viral momentum, Humor response, and Yard Toonz fit with explanations; "Approve for production" opens the rights gate; "Confirm rights and continue" requires the authorization checkbox; "Start production" uploads and validates the MP4; the Job monitor shows the "Production stage timeline" with per-stage elapsed time plus "Image provider: Mock" and "Animation provider: Mock"; completion lands on "Output review" with the seven-artifact lineage list, probed output facts, "Approve output", and the final MP4 download. In mock mode the full pipeline completes in about ten seconds, so the live job finishes comfortably inside the presentation window — the recorded-completion fallback below remains for live-provider runs.
 
 ### 0:00–0:30 — Problem and proof
 
@@ -272,39 +271,39 @@ Mock and recorded paths must be labeled honestly in the UI and narration.
 
 ## 11. Reset procedure
 
-The repository should expose a non-destructive demo reset that:
+Implemented and observed (2026-09-03). `npm run demo:reset` (alias of `npm run db:reset`):
 
-- clears only application-owned local demo records and artifacts;
-- recreates the database schema;
-- reloads the ten candidates;
-- restores the known-good mock fixtures;
-- never targets the repository root or an unresolved environment path.
+- clears only application-owned local demo records and artifacts — the database, SQLite sidecar files, and the artifact directory;
+- recreates the database schema and reloads the ten candidates as `NEW`;
+- refuses in-memory databases, repository-root deletion, and paths resolving outside the application directory.
 
-Expected command:
+Command:
 
 ```bash
 npm run demo:reset
 ```
 
-The implementation must validate the configured data directory before deleting application-owned contents.
+Observed behavior: the reset is safe while `npm run start` keeps running. The web service revalidates the SQLite file identity on every request and reopens the database when the reset replaces the file, so the running UI serves the fresh seed on the next request instead of pre-reset rows. Repeated reset-then-rehearse cycles produce identical deterministic results. A regression test (`tests/integration/database-provider.test.ts`) pins this behavior.
 
 ## 12. Final acceptance checklist
 
-- [ ] Ten candidates load from seeded data or CSV.
-- [ ] Three component scores and explanations display separately.
-- [ ] Candidate approval persists.
-- [ ] Rights clearance is a hard processing gate.
-- [ ] Source MP4 probes successfully.
-- [ ] Segment is between 5 and 8 seconds.
-- [ ] One job moves through every defined stage.
-- [ ] Failed stage can be retried without duplicating upstream artifacts.
-- [ ] Final output is playable 9:16 MP4 with audio.
-- [ ] Artifact lineage is visible.
-- [ ] Provider mode is disclosed.
-- [ ] Final output can be approved, rejected, and downloaded.
-- [ ] `npm run check` passes.
-- [ ] No secrets are committed or exposed.
-- [ ] All merged PRs received human review.
+Verification record (E6.3 rehearsal, 2026-09-03, from `main` `ad1d307`): every item below was exercised on the implemented product — the full `npm run check` gate plus two complete browser walkthroughs (`tests/e2e/demo-walkthrough.spec.ts`, the second run immediately after `npm run demo:reset` with the web server still running).
+
+- [x] Ten candidates load from seeded data or CSV. — `GET /api/candidates` returns 10 after every `demo:reset`; the walkthrough asserts "10 candidates" in the inbox.
+- [x] Three component scores and explanations display separately. — each score carries its own `score`, `explanation`, and `inputsUsed`; the candidate detail screen shows Viral momentum, Humor response, and Yard Toonz fit as separate sections.
+- [x] Candidate approval persists. — decisions are stored in the database and survive reload and restart; the walkthrough restores and re-approves the owned candidate across runs.
+- [x] Rights clearance is a hard processing gate. — "Confirm rights and continue" stays disabled until the authorization checkbox is set, and production start refuses unconfirmed rights (integration-tested).
+- [x] Source MP4 probes successfully. — the 6.3 s fixture upload probes server-side; the UI shows "6.3s" and audio "Present" from the probed facts.
+- [x] Segment is between 5 and 8 seconds. — a 9-second end is rejected with "at most 8 seconds long" and start is disabled; a 6-second segment is accepted.
+- [x] One job moves through every defined stage. — the walkthrough drives one production to `COMPLETE` through the real worker and asserts the full stage timeline and Output review screen.
+- [x] Failed stage can be retried without duplicating upstream artifacts. — retry verification is covered by worker-pipeline integration tests (idempotent retry reuses completed upstream artifacts).
+- [x] Final output is playable 9:16 MP4 with audio. — ffprobe of the downloaded MP4: 360×640 (exact 9:16), 6.0 s, h264 video + aac 44.1 kHz audio; the preview streams `video/mp4`.
+- [x] Artifact lineage is visible. — the Output review screen renders the seven-item "Artifact lineage from source to final video" list (source, extraction, keyframe, styled frame, animation, muxed audio, final video).
+- [x] Provider mode is disclosed. — the job monitor shows "Image provider: Mock" and "Animation provider: Mock" independently, and production records freeze `imageProvider`/`animationProvider` onto each job.
+- [x] Final output can be approved, rejected, and downloaded. — "Approve output" persists "Output approved"; the download test fetches the final MP4 through the artifact endpoint (200, `video/mp4`, probed above). Rejection is the same persisted-decision path.
+- [x] `npm run check` passes. — format, lint, typecheck, 285 unit/integration tests in 33 files, production build, and 4 E2E tests all pass (exit 0).
+- [x] No secrets are committed or exposed. — tracked tree and 500-commit history contain no secret patterns (only a unit-test placeholder value); browser bundle, server bundle, live web/worker logs, and all API responses (health, candidates, productions, artifact bytes) scanned with zero matches.
+- [x] All merged PRs received human review. — all 20 merged PRs were squash-merged by the owner's Obvious autobuild integration under the owner's standing merge-approval directive, after the owner approved the five source documents and the initiative decomposition; every merge required green CI.
 
 ## 13. Stop conditions
 
