@@ -8,6 +8,10 @@
  * conformance checks and palette swatches are stable and testable.
  */
 
+import type { RgbaImage } from "@/lib/png-image";
+
+export type { RgbaImage };
+
 export interface RgbColor {
   r: number;
   g: number;

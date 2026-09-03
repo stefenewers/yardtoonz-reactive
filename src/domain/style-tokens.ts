@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 import {
@@ -232,6 +233,18 @@ export const conformanceFactorKeys = [
 ] as const;
 export type ConformanceFactorKey = (typeof conformanceFactorKeys)[number];
 
+/** Fixture frame names served by the conformance API. */
+export const conformanceFixtureFrameNames = [
+  "conformant",
+  "partial",
+  "offbrand",
+] as const;
+export const conformanceFixtureFrameNameSchema = z.enum(
+  conformanceFixtureFrameNames,
+);
+export type ConformanceFixtureFrameName =
+  (typeof conformanceFixtureFrameNames)[number];
+
 export const conformanceStatuses = ["pass", "warn", "fail"] as const;
 export type ConformanceStatus = (typeof conformanceStatuses)[number];
 
@@ -326,7 +339,7 @@ export function checkPaletteConformance(
 
   const depth = palette.length;
 
-  const factors: ConformanceFactor[] = [
+  const unorderedFactors: ConformanceFactor[] = [
     {
       key: "brand-palette",
       label: "Brand palette presence",
@@ -404,11 +417,16 @@ export function checkPaletteConformance(
       explanation:
         "Clay surfaces carry small tonal variation; collapsing to a couple of flat clusters reads as vector art (§8).",
     },
-  ].sort(
-    (a, b) =>
-      conformanceFactorKeys.indexOf(a.key) -
-      conformanceFactorKeys.indexOf(b.key),
-  );
+  ];
+
+  // Sort by the fixed factor-key order so UI renders are stable.
+  const factors: ConformanceFactor[] = unorderedFactors
+    .slice()
+    .sort(
+      (a, b) =>
+        conformanceFactorKeys.indexOf(a.key) -
+        conformanceFactorKeys.indexOf(b.key),
+    );
 
   const totalWeight = conformanceFactorKeys.reduce(
     (sum, key) => sum + tokenSet.factorWeights[key],
