@@ -8,6 +8,7 @@ export default function Home() {
     <CandidateWorkspace
       imageProvider={env.IMAGE_PROVIDER}
       animationProvider={env.ANIMATION_PROVIDER}
+      maxUploadMb={env.MAX_UPLOAD_MB}
     />
   );
 }

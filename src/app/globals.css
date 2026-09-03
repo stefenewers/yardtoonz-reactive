@@ -1186,3 +1186,201 @@ input:focus-visible {
     min-width: 58rem;
   }
 }
+
+.setup-panel {
+  display: grid;
+  gap: 1.25rem;
+  align-content: start;
+}
+
+.setup-panel .back-button {
+  justify-self: start;
+}
+
+.setup-panel .lede {
+  margin-top: 0;
+}
+
+.setup-panel .upload-field {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.preview-block {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.preview-block video {
+  width: min(100%, 22rem);
+  border: 2px solid var(--outline);
+  border-radius: 1rem;
+  background: rgb(7 6 5 / 45%);
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+
+.preview-note {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.setup-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.setup-facts div {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface-raised);
+}
+
+.setup-facts dt {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.setup-facts dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.segment-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+}
+
+.segment-fields legend {
+  padding: 0 0.4rem;
+  font-weight: 800;
+}
+
+.segment-fields label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.segment-fields input {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: rgb(7 6 5 / 25%);
+  color: var(--text);
+  font: inherit;
+}
+
+.segment-feedback {
+  min-height: 1.2rem;
+  margin: -0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.direction-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.direction-field span {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.direction-field textarea {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: rgb(7 6 5 / 25%);
+  color: var(--text);
+  font: inherit;
+}
+
+.setup-card {
+  display: grid;
+  gap: 1.1rem;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  border: 2px solid var(--outline);
+  border-radius: 1.15rem;
+  background: var(--surface-raised);
+  box-shadow: 8px 8px 0 var(--outline);
+  align-content: start;
+}
+
+.setup-card h2 {
+  margin: 0;
+}
+
+.gate-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gate-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: rgb(7 6 5 / 25%);
+}
+
+.gate-row--done {
+  border-color: rgb(113 212 140 / 45%);
+}
+
+.gate-row--todo {
+  border-style: dashed;
+}
+
+.gate-row > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.gate-row p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.gate-marker {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  font-weight: 950;
+  flex-shrink: 0;
+}
+
+.gate-row--done .gate-marker {
+  background: var(--success);
+  color: var(--accent-dark);
+}
+
+.gate-row--todo .gate-marker {
+  border: 2px solid var(--line);
+  color: var(--text-muted);
+}
+
+.setup-card .primary-button,
+.setup-card .secondary-button {
+  width: 100%;
+}

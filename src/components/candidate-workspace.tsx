@@ -14,9 +14,9 @@ import { createApiCandidateClient } from "@/lib/candidate-client";
 import { fetchHealthReport } from "@/lib/health-client";
 import type { PublicHealthReportPayload } from "@/shared/health";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
-import { ProductionStudio } from "@/app/produce/production-studio";
 import { CandidateDetail } from "@/components/candidate-detail";
 import { CandidateInbox } from "@/components/candidate-inbox";
+import { ProductionSetup } from "@/components/production-setup";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
 type RequestState = "idle" | "loading" | "error";
@@ -24,6 +24,7 @@ type RequestState = "idle" | "loading" | "error";
 interface CandidateWorkspaceProps {
   imageProvider: ImageProvider;
   animationProvider: AnimationProvider;
+  maxUploadMb: number;
 }
 
 function ProviderDisclosure({
@@ -47,6 +48,7 @@ function ProviderDisclosure({
 export function CandidateWorkspace({
   imageProvider,
   animationProvider,
+  maxUploadMb,
 }: CandidateWorkspaceProps) {
   const client = useMemo(() => createApiCandidateClient(), []);
   const [screen, setScreen] = useState<Screen>("inbox");
@@ -346,8 +348,8 @@ export function CandidateWorkspace({
                     and selected audio.
                   </strong>
                   <small>
-                    This decision will be timestamped when production
-                    persistence is connected.
+                    This decision is timestamped and stored before any upload
+                    or processing.
                   </small>
                 </span>
               </label>
@@ -369,9 +371,13 @@ export function CandidateWorkspace({
         )}
 
         {screen === "upload" && selected && (
-          <ProductionStudio
-            initialRightsConfirmed
+          <ProductionSetup
+            candidateId={selected.id}
             candidateCaption={selected.caption}
+            imageProvider={imageProvider}
+            animationProvider={animationProvider}
+            maxUploadMb={maxUploadMb}
+            onBack={() => setScreen("rights")}
           />
         )}
       </main>
