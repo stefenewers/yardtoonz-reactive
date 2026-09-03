@@ -9,7 +9,11 @@ import {
   type PublicHealthReport,
 } from "@/lib/health-report";
 import { getMediaToolHealth } from "@/lib/media-tools";
-import { openDatabase, type DatabaseConnection } from "@/server/db/client";
+import {
+  openDatabase,
+  resolveSqliteFilename,
+  type DatabaseConnection,
+} from "@/server/db/client";
 import { getLatestWorkerHeartbeat } from "@/server/db/heartbeats";
 
 import { probeArtifactRoot } from "./artifact-root";
@@ -41,7 +45,14 @@ function openHealthConnection(
       workingDirectory,
       migrationsFolder,
     });
-    cachedConnection = connection;
+    // Cache only in-memory databases: their data lives in the connection, so
+    // caching is required for reports to share state. File-backed databases
+    // open fresh per report like every other service — demo:reset can replace
+    // the file under a live server, and a cached handle would keep reading
+    // the deleted inode's stale rows.
+    if (resolveSqliteFilename(databaseUrl, workingDirectory) === ":memory:") {
+      cachedConnection = connection;
+    }
 
     return { connection, probe: probeDatabase(connection.database) };
   } catch (error: unknown) {

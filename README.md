@@ -42,6 +42,8 @@ Open <http://localhost:3000>. The default `IMAGE_PROVIDER=MOCK` and `ANIMATION_P
 
 CI runs `npm run playwright:install` followed by the same `npm run check` command contributors run locally.
 
+The worker runs plain tsx outside the Next.js bundler, so `npm run worker` passes the `react-server` export condition explicitly. That resolves the `server-only` guard to its empty server implementation instead of throwing; pass the same flag when running worker entry points ad hoc.
+
 ## Local persistence
 
 SQLite migrations create the six specification tables for candidates, comments, productions, stages, artifacts, and editorial decisions, plus the existing rights-confirmation hard gate and the operational `worker_heartbeats` table used by the health endpoint. Production timestamps use SQLite integer milliseconds internally, while the candidate API continues to expose UTC ISO timestamps.
