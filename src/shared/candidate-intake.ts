@@ -10,6 +10,7 @@ export const candidateIntakeProviderKinds = [
   "SEEDED",
   "CSV",
   "MANUAL",
+  "TREND_FEED",
 ] as const;
 export const candidateIntakeProviderKindSchema = z.enum(
   candidateIntakeProviderKinds,
