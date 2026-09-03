@@ -1,0 +1,49 @@
+{
+  "name": "yardtoonz-reactive",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:tools": "vitest run tests/integration/media-tools.test.ts",
+    "test:e2e": "playwright test",
+    "playwright:install": "node scripts/provision-playwright.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run test:e2e"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Human-directed, local-first Yard Toonz cartoon production workflow",
+  "dependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "ffmpeg-static": "^5.3.0",
+    "next": "^16.3.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.59.0",
+    "@sparticuz/chromium": "147.0.0",
+    "@types/node": "^20.19.23",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "^16.3.4",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20.20.2 <21",
+    "npm": ">=10.8.2 <11"
+  }
+}
