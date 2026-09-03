@@ -168,7 +168,7 @@ function getJobDirectory(jobId: string): string {
 }
 
 function getArtifactUrl(jobId: string, name: MediaArtifactName): string {
-  return `/api/productions/${jobId}/artifacts/${name}`;
+  return `/api/demo/cartoons/${jobId}/artifacts/${name}`;
 }
 
 async function runMediaTool(executable: string, args: string[]): Promise<void> {
@@ -189,6 +189,35 @@ async function probeMedia(filePath: string) {
     filePath,
   ]);
   return probeSchema.parse(JSON.parse(stdout) as unknown);
+}
+
+export interface StoredVideoProbe {
+  durationSeconds: number;
+  audioPresent: boolean;
+  width: number | null;
+  height: number | null;
+  videoCodec: string | null;
+  audioCodec: string | null;
+}
+
+/**
+ * Probes a stored source video so the API can gate production start on real
+ * media facts (duration, audio) instead of trusting the upload alone.
+ */
+export async function probeStoredVideo(
+  filePath: string,
+): Promise<StoredVideoProbe> {
+  const probe = await probeMedia(filePath);
+  const video = probe.streams.find((stream) => stream.codec_type === "video");
+  const audio = probe.streams.find((stream) => stream.codec_type === "audio");
+  return {
+    durationSeconds: probe.format.duration,
+    audioPresent: probe.streams.some((stream) => stream.codec_type === "audio"),
+    width: video?.width ?? null,
+    height: video?.height ?? null,
+    videoCodec: video?.codec_name ?? null,
+    audioCodec: audio?.codec_name ?? null,
+  };
 }
 
 function assertMockProviders(): void {
