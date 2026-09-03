@@ -9,8 +9,16 @@ describe("package-managed media tools", () => {
     expect(statuses).toHaveLength(2);
     expect(statuses).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "ffmpeg", available: true }),
-        expect.objectContaining({ name: "ffprobe", available: true }),
+        expect.objectContaining({
+          name: "ffmpeg",
+          available: true,
+          diagnostic: "available",
+        }),
+        expect.objectContaining({
+          name: "ffprobe",
+          available: true,
+          diagnostic: "available",
+        }),
       ]),
     );
     for (const status of statuses)

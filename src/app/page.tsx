@@ -17,8 +17,12 @@ export default async function Home() {
         </p>
         <dl className="status-grid">
           <div>
-            <dt>Provider mode</dt>
-            <dd>{env.PROVIDER_MODE}</dd>
+            <dt>Image provider</dt>
+            <dd>{env.IMAGE_PROVIDER}</dd>
+          </div>
+          <div>
+            <dt>Animation provider</dt>
+            <dd>{env.ANIMATION_PROVIDER}</dd>
           </div>
           {mediaTools.map((tool) => (
             <div key={tool.name}>

@@ -27,7 +27,7 @@ Read the five documents in `docs/` before changing product behavior. Their openi
 - Do not add live OpenAI or Runway integrations without explicit approval.
 - Rights confirmation is a persisted hard gate before media processing.
 - Do not add social scraping, automatic third-party downloads, publishing, authentication, billing, or multi-scene generation.
-- Provider mode must be disclosed honestly in the UI and output metadata.
+- Image and animation provider selections must be disclosed independently and honestly in the UI and output metadata.
 
 ## Review and merge
 

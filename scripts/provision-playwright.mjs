@@ -1,15 +1,29 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-process.env.AWS_EXECUTION_ENV ??= "AWS_Lambda_nodejs20.x";
+import {
+  getPlaywrightExecutablePath,
+  playwrightBrowserSelections,
+  selectPlaywrightBrowser,
+} from "./playwright-browser.mjs";
 
-const { default: chromium } = await import("@sparticuz/chromium");
-chromium.setGraphicsMode = false;
+const execFileAsync = promisify(execFile);
+const selection = selectPlaywrightBrowser(process.platform);
 
-const executablePath = await chromium.executablePath();
-const { stdout } = await promisify(execFile)(executablePath, ["--version"], {
+if (selection === playwrightBrowserSelections.standard) {
+  const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+  await execFileAsync(npxCommand, ["playwright", "install", "chromium"], {
+    env: process.env,
+    timeout: 120_000,
+  });
+}
+
+const executablePath = await getPlaywrightExecutablePath();
+const { stdout } = await execFileAsync(executablePath, ["--version"], {
   env: process.env,
   timeout: 30_000,
 });
 
-console.log(`Playwright Chromium ready: ${stdout.trim()} at ${executablePath}`);
+console.log(
+  `Playwright browser ready: ${selection} (${stdout.trim()}) at ${executablePath}`,
+);

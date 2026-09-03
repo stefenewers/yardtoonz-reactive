@@ -1,12 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// The repo sandbox is intentionally minimal. This flag makes the package extract
-// its bundled Linux libraries instead of relying on host-installed browser deps.
-process.env.AWS_EXECUTION_ENV ??= "AWS_Lambda_nodejs20.x";
+import { getPlaywrightLaunchOptions } from "./scripts/playwright-browser.mjs";
 
-const { default: chromium } = await import("@sparticuz/chromium");
-chromium.setGraphicsMode = false;
-const executablePath = await chromium.executablePath();
+const launchOptions = await getPlaywrightLaunchOptions();
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -17,10 +13,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:3100",
     trace: "on-first-retry",
-    launchOptions: {
-      args: chromium.args,
-      executablePath,
-    },
+    launchOptions,
   },
   projects: [
     {
