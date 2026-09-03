@@ -17,12 +17,12 @@ test("candidate moves from inbox through approval and rights gate to upload", as
 
   await page
     .getByRole("button", {
-      name: /One phone call turns a quiet reasoning into pure yard chaos/,
+      name: /The bus finally arrives just as everybody gives up waiting/,
     })
     .click();
   await expect(
     page.getByRole("heading", {
-      name: "One phone call turns a quiet reasoning into pure yard chaos.",
+      name: "The bus finally arrives just as everybody gives up waiting.",
     }),
   ).toBeVisible();
   await expect(page.getByText("Viral momentum")).toBeVisible();

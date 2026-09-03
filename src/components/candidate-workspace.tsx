@@ -8,8 +8,9 @@ import {
   type Candidate,
   type ScoreEvidence,
 } from "@/domain/candidate";
-import { createMockCandidateClient } from "@/lib/candidate-client";
+import { createApiCandidateClient } from "@/lib/candidate-client";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
+import { ProductionStudio } from "@/app/produce/production-studio";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
 type RequestState = "idle" | "loading" | "error";
@@ -72,7 +73,7 @@ export function CandidateWorkspace({
   imageProvider,
   animationProvider,
 }: CandidateWorkspaceProps) {
-  const client = useMemo(() => createMockCandidateClient(), []);
+  const client = useMemo(() => createApiCandidateClient(), []);
   const [screen, setScreen] = useState<Screen>("inbox");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState<Candidate>();
@@ -461,50 +462,10 @@ export function CandidateWorkspace({
         )}
 
         {screen === "upload" && selected && (
-          <section aria-labelledby="upload-title">
-            <div className="success-banner" role="status">
-              <span>✓</span>
-              <div>
-                <strong>Rights confirmed</strong>
-                <p>
-                  The source and selected audio are authorized for this
-                  production setup.
-                </p>
-              </div>
-            </div>
-            <div className="page-heading">
-              <div>
-                <p className="eyebrow">Production setup · 2 of 2</p>
-                <h1 id="upload-title">Upload the source clip</h1>
-                <p>
-                  Choose the authorized MP4. Clip validation and segment
-                  selection arrive with the production engine.
-                </p>
-              </div>
-            </div>
-            <div className="upload-grid">
-              <label className="upload-target">
-                <input type="file" accept="video/mp4" />
-                <span className="upload-icon">↑</span>
-                <strong>Choose an authorized MP4</strong>
-                <small>
-                  MP4 only · the original filename will not be used as a storage
-                  key
-                </small>
-              </label>
-              <aside>
-                <h2>Production providers</h2>
-                <ProviderDisclosure
-                  imageProvider={imageProvider}
-                  animationProvider={animationProvider}
-                />
-                <p className="provider-note">
-                  Each stage keeps its own provider attribution. Mock output
-                  will never be labeled as OpenAI or Runway output.
-                </p>
-              </aside>
-            </div>
-          </section>
+          <ProductionStudio
+            initialRightsConfirmed
+            candidateCaption={selected.caption}
+          />
         )}
       </main>
     </div>

@@ -4,6 +4,14 @@ import {
   type Candidate,
   type CandidateReviewClient,
 } from "../domain/candidate";
+import type { ZodType } from "zod";
+
+import {
+  apiErrorResponseSchema,
+  approveCandidateResponseSchema,
+  confirmRightsResponseSchema,
+  listCandidatesResponseSchema,
+} from "../shared/candidates";
 
 const score = (value: number, explanation: string, inputsUsed: string[]) => ({
   score: value,
@@ -117,6 +125,90 @@ const seededCandidates: Candidate[] = [
     };
   }),
 ];
+
+type CandidateFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
+async function parseCandidateResponse<T>(
+  response: Response,
+  schema: ZodType<T>,
+): Promise<T> {
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (cause) {
+    throw new Error("Candidate service returned an invalid response.", {
+      cause,
+    });
+  }
+
+  if (!response.ok) {
+    const apiError = apiErrorResponseSchema.safeParse(payload);
+    throw new Error(
+      apiError.success
+        ? apiError.data.error.message
+        : "Candidate service request failed.",
+    );
+  }
+
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error("Candidate service returned an invalid response.", {
+      cause: parsed.error,
+    });
+  }
+  return parsed.data;
+}
+
+export function createApiCandidateClient(
+  candidateFetch: CandidateFetch = fetch,
+): CandidateReviewClient {
+  return {
+    async listCandidates() {
+      const response = await candidateFetch("/api/candidates");
+      const { candidates } = await parseCandidateResponse(
+        response,
+        listCandidatesResponseSchema,
+      );
+      return candidateListSchema.parse(candidates);
+    },
+    async approveCandidate(candidateId) {
+      const response = await candidateFetch(`/api/candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "APPROVED" }),
+      });
+      const { candidate } = await parseCandidateResponse(
+        response,
+        approveCandidateResponseSchema,
+      );
+      return candidateSchema.parse(candidate);
+    },
+    async confirmRights({ candidateId, confirmationTextVersion }) {
+      const response = await candidateFetch(
+        `/api/candidates/${candidateId}/rights`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            confirmed: true,
+            confirmationTextVersion,
+          }),
+        },
+      );
+      const { rightsConfirmation } = await parseCandidateResponse(
+        response,
+        confirmRightsResponseSchema,
+      );
+      return {
+        confirmed: rightsConfirmation.confirmed,
+        confirmedAt: rightsConfirmation.confirmedAt,
+      };
+    },
+  };
+}
 
 function wait(milliseconds = 350): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
