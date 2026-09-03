@@ -58,7 +58,9 @@ export function rgbToHex({ r, g, b }: RgbColor): string {
 
 /** Parses `#rgb` or `#rrggbb`; anything else is not a color. */
 export function parseHexColor(value: string): RgbColor | undefined {
-  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/u.exec(value.trim().toLowerCase());
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/u.exec(
+    value.trim().toLowerCase(),
+  );
   if (!match) return undefined;
   const digits = match[1]!;
   if (digits.length === 3) {
@@ -216,11 +218,17 @@ export function extractPalette(
   const clusters: { rgb: RgbColor; pixelCount: number }[] = [];
   for (const candidate of ranked) {
     if (clusters.length >= options.maxColors) break;
-    const merged = clusters.some(
+    const absorbing = clusters.find(
       (cluster) =>
         colorDistance(cluster.rgb, candidate.rgb) < options.mergeDistance,
     );
-    if (!merged) clusters.push(candidate);
+    if (absorbing) {
+      // Fold merged buckets into the absorbing cluster so palette weights
+      // conserve the full sampled pixel count instead of losing pixels.
+      absorbing.pixelCount += candidate.pixelCount;
+      continue;
+    }
+    clusters.push(candidate);
   }
 
   return clusters.map((cluster) => ({
@@ -252,9 +260,7 @@ export function paletteWeightNear(
 ): number {
   return palette
     .filter((entry) =>
-      targets.some(
-        (target) => colorDistance(entry.rgb, target) <= maxDistance,
-      ),
+      targets.some((target) => colorDistance(entry.rgb, target) <= maxDistance),
     )
     .reduce((sum, entry) => sum + entry.weight, 0);
 }

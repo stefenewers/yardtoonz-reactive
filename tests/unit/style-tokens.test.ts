@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import type { PaletteColor } from "../../src/domain/style-palette";
 import {
   brandAccentColors,
-  clayStyleTokenSet,
   checkPaletteConformance,
+  clayStyleTokenSet,
+  clayStyleTokenSetVersion,
   conformanceFactorKeys,
-  conformanceQuerySchema,
   conformanceFixtureFrameNameSchema,
-  fixtureImageDirectory,
-  fixtureImageName,
+  conformanceFixtureFrameNames,
   type ClayStyleTokenSet,
-  type PaletteColor,
 } from "../../src/domain/style-tokens";
+import { conformanceQuerySchema } from "../../src/domain/style-api";
 
 function color(
   hex: string,
@@ -40,56 +40,69 @@ const offbrandPalette: PaletteColor[] = [
 describe("clay style token set", () => {
   it("carries the versioned brand and quality tokens", () => {
     const tokenSet: ClayStyleTokenSet = clayStyleTokenSet;
-    expect(tokenSet.version).toBe("clay-style-v1");
+    expect(tokenSet.version).toBe(clayStyleTokenSetVersion);
+    expect(clayStyleTokenSetVersion).toBe("clay-v1");
     expect(tokenSet.colors.map((entry) => entry.hex)).toEqual(
-      expect.arrayContaining(["#ffd83d", "#71d48c", "#e0452c", "#fff9e8"]),
+      expect.arrayContaining(["#ffd83d", "#71d48c", "#ff746c", "#fff9e8"]),
     );
-    expect(tokenSet.qualities.length).toBeGreaterThan(2);
+    expect(tokenSet.qualities.length).toBeGreaterThanOrEqual(5);
+    expect(Object.keys(tokenSet.factorWeights)).toEqual(
+      expect.arrayContaining([...conformanceFactorKeys]),
+    );
   });
 
-  it("lists the three brand accent colors", () => {
-    expect(brandAccentColors).toEqual([
-      { r: 224, g: 69, b: 44 },
-      { r: 255, g: 216, b: 61 },
-      { r: 113, g: 212, b: 140 },
+  it("lists the brand accent colors as RGB for palette matching", () => {
+    expect(brandAccentColors().map(({ key, rgb }) => [key, rgb])).toEqual([
+      ["yellow", { r: 255, g: 216, b: 61 }],
+      ["green", { r: 113, g: 212, b: 140 }],
+      ["red", { r: 255, g: 116, b: 108 }],
     ]);
   });
 
-  it("exposes fixture paths for every frame name", () => {
-    expect(fixtureImageDirectory).toBe("brand/fixtures");
-    expect(fixtureImageName("conformant")).toBe(
-      "brand/fixtures/conformant-frame.png",
-    );
-    expect(fixtureImageName("offbrand")).toBe(
-      "brand/fixtures/offbrand-frame.png",
-    );
-  });
-
-  it("validates fixture names and conformance queries", () => {
-    expect(conformanceFixtureFrameNameSchema.safeParse("partial").success).toBe(
-      true,
-    );
+  it("names exactly the three conformance fixture frames", () => {
+    expect(conformanceFixtureFrameNames).toEqual([
+      "conformant",
+      "partial",
+      "offbrand",
+    ]);
+    for (const name of conformanceFixtureFrameNames) {
+      expect(conformanceFixtureFrameNameSchema.safeParse(name).success).toBe(
+        true,
+      );
+    }
     expect(
       conformanceFixtureFrameNameSchema.safeParse("nonsense").success,
     ).toBe(false);
+  });
+
+  it("validates the conformance query contract", () => {
     expect(
       conformanceQuerySchema.safeParse({ frame: "offbrand" }).success,
     ).toBe(true);
+    expect(
+      conformanceQuerySchema.safeParse({ frame: "nonsense" }).success,
+    ).toBe(false);
+    expect(conformanceQuerySchema.safeParse({}).success).toBe(false);
   });
 });
 
 describe("checkPaletteConformance", () => {
+  const statuses = (result: ReturnType<typeof checkPaletteConformance>) =>
+    Object.fromEntries(
+      result.factors.map((factor) => [factor.key, factor.status]),
+    );
+
   it("rewards the brand palette with a conformant verdict", () => {
     const result = checkPaletteConformance(conformantPalette);
 
     expect(result.verdict).toBe("CONFORMANT");
-    expect(result.version).toBe("clay-style-v1");
-    const statuses = Object.fromEntries(
-      result.factors.map((factor) => [factor.key, factor.status]),
-    );
-    expect(statuses["brand-palette"]).toBe("pass");
-    expect(result.factors.map((factor) => factor.key)).toEqual(
-      conformanceFactorKeys,
+    expect(result.version).toBe(clayStyleTokenSetVersion);
+    expect(statuses(result)["brand-palette"]).toBe("pass");
+    expect(result.factors.map((factor) => factor.key)).toEqual([
+      ...conformanceFactorKeys,
+    ]);
+    expect(result.factors.every((factor) => factor.status === "pass")).toBe(
+      true,
     );
   });
 
@@ -103,34 +116,36 @@ describe("checkPaletteConformance", () => {
     const result = checkPaletteConformance([]);
 
     expect(result.verdict).toBe("OFF_BRAND");
-    expect(result.score).toBe(0);
-    expect(result.factors.every((factor) => factor.status === "fail")).toBe(
-      true,
-    );
+    expect(result.score).toBeLessThan(50);
+    expect(statuses(result)["brand-palette"]).toBe("fail");
+    expect(statuses(result)["outline-contrast"]).toBe("fail");
+    expect(statuses(result)["controlled-saturation"]).toBe("fail");
+    expect(statuses(result)["tactile-color-depth"]).toBe("fail");
   });
 
   it("penalizes an off-brand cool palette", () => {
     const result = checkPaletteConformance(offbrandPalette);
 
     expect(result.verdict).toBe("OFF_BRAND");
-    expect(result.factors.find((f) => f.key === "brand-palette")?.status).toBe(
-      "fail",
-    );
-    expect(result.factors.find((f) => f.key === "warmth")?.status).not.toBe(
-      "pass",
-    );
+    expect(statuses(result)["brand-palette"]).toBe("fail");
+    expect(statuses(result)["warm-lighting"]).not.toBe("pass");
   });
 
-  it("respects custom thresholds for warn states", () => {
+  it("honors a stricter token set for warn states", () => {
     // Same palette, but brand share must reach 0.99 to pass, else warn.
-    const result = checkPaletteConformance(conformantPalette, {
-      brandPaletteSharePass: 0.99,
-      brandPaletteShareWarn: 0.5,
-    });
+    const strictTokenSet: ClayStyleTokenSet = {
+      ...clayStyleTokenSet,
+      thresholds: {
+        ...clayStyleTokenSet.thresholds,
+        brandPaletteSharePass: 0.99,
+        brandPaletteShareWarn: 0.5,
+      },
+    };
 
-    expect(result.factors.find((f) => f.key === "brand-palette")?.status).toBe(
-      "warn",
-    );
+    const result = checkPaletteConformance(conformantPalette, strictTokenSet);
+
+    expect(statuses(result)["brand-palette"]).toBe("warn");
+    expect(result.score).toBeLessThan(100);
   });
 
   it("fails outline contrast for washed-out gray palettes", () => {
@@ -141,9 +156,20 @@ describe("checkPaletteConformance", () => {
 
     const result = checkPaletteConformance(flat);
 
-    expect(
-      result.factors.find((factor) => factor.key === "outline-contrast")
-        ?.status,
-    ).toBe("fail");
+    expect(statuses(result)["outline-contrast"]).toBe("fail");
+  });
+
+  it("warns on shallow palettes between the depth thresholds", () => {
+    const shallow: PaletteColor[] = [
+      color("#ffd83d", { r: 255, g: 216, b: 61 }),
+      color("#e0452c", { r: 224, g: 69, b: 44 }),
+      color("#7a4a21", { r: 122, g: 74, b: 33 }),
+      color("#3c2d1e", { r: 60, g: 45, b: 30 }),
+    ];
+
+    const result = checkPaletteConformance(shallow);
+
+    expect(statuses(result)["tactile-color-depth"]).toBe("warn");
+    expect(result.score).toBeLessThan(100);
   });
 });

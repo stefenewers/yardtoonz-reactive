@@ -175,9 +175,8 @@ export function StyleGuideInspector({ guide }: { guide: StyleGuideResponse }) {
         <h1>Style guide inspector</h1>
         <p className="lede">
           The committed brand tokens, the palette extracted from the committed
-          logo fixture, and conformance results for the generated fixture
-          frames — all computed by the same pure pixel functions the API
-          serves.
+          logo fixture, and conformance results for the generated fixture frames
+          — all computed by the same pure pixel functions the API serves.
         </p>
       </header>
 

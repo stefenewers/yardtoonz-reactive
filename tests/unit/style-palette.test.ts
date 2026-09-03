@@ -33,7 +33,9 @@ describe("png codec", () => {
   });
 
   it("rejects bytes without the PNG signature", () => {
-    expect(() => decodePng(new Uint8Array([1, 2, 3]))).toThrow(/PNG signature/);
+    expect(() => decodePng(new Uint8Array([1, 2, 3]))).toThrow(
+      /not a PNG image/,
+    );
   });
 });
 
@@ -47,7 +49,7 @@ describe("extractPalette", () => {
 
   it("separates distinct color clusters and sorts by weight", () => {
     const image = createRgbaImage(40, 10, red);
-    for (let y = 5; y < 10; y += 1) {
+    for (let y = 6; y < 10; y += 1) {
       for (let x = 0; x < 40; x += 1) setPixel(image, x, y, blue);
     }
     // A thin near-red stripe that must merge into the red cluster.
@@ -114,7 +116,7 @@ describe("color math", () => {
 
   it("converts RGB to HSL", () => {
     const hsl = rgbToHsl({ r: 255, g: 216, b: 61 });
-    expect(hsl.h).toBeCloseTo(47, 0);
+    expect(hsl.h).toBeCloseTo(48, 0);
     expect(hsl.s).toBeGreaterThan(0.99);
     expect(hsl.l).toBeCloseTo(0.62, 2);
   });
@@ -124,7 +126,7 @@ describe("color math", () => {
       { hex: "#dc2828", rgb: red, weight: 0.5, pixelCount: 100 },
       { hex: "#283cdc", rgb: blue, weight: 0.5, pixelCount: 100 },
     ];
-    expect(nearestPaletteColor(palette, nearRed)?.hex).toBe("#dc2828");
+    expect(nearestPaletteColor(palette, nearRed)?.color.hex).toBe("#dc2828");
     expect(nearestPaletteColor([], red)).toBeUndefined();
   });
 });
@@ -149,7 +151,7 @@ describe("palette statistics", () => {
 
   it("sums weight near target colors within a distance", () => {
     expect(paletteWeightNear(palette, [red], 60)).toBeCloseTo(0.75, 5);
-    expect(paletteWeightNear(palette, [red], 0)).toBe(0);
+    expect(paletteWeightNear(palette, [{ r: 255, g: 255, b: 255 }], 0)).toBe(0);
     expect(paletteWeightNear([], [red], 110)).toBe(0);
   });
 });

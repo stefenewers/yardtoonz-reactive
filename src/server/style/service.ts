@@ -2,10 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { decodePng } from "@/lib/png-image";
-import {
-  extractPalette,
-  type PaletteColor,
-} from "@/domain/style-palette";
+import { extractPalette, type PaletteColor } from "@/domain/style-palette";
 import type { EnrichPromptsRequest } from "@/domain/style-prompt";
 import { enrichTreatmentPrompts } from "@/domain/style-prompt";
 import {

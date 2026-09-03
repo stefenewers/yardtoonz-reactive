@@ -20,11 +20,7 @@ export const maxCreativeDirectionLength = 2000;
 export const claymationPromptInputSchema = z
   .object({
     /** The Director treatment's `claymationPrompt` line. */
-    treatmentPrompt: z
-      .string()
-      .trim()
-      .min(1)
-      .max(maxTreatmentPromptLength),
+    treatmentPrompt: z.string().trim().min(1).max(maxTreatmentPromptLength),
     /** The producer's approved creative-direction note, if any. */
     creativeDirection: z
       .string()
@@ -35,9 +31,7 @@ export const claymationPromptInputSchema = z
   })
   .strict()
   .readonly();
-export type ClaymationPromptInput = z.infer<
-  typeof claymationPromptInputSchema
->;
+export type ClaymationPromptInput = z.infer<typeof claymationPromptInputSchema>;
 
 export const motionPromptInputSchema = z
   .object({
@@ -54,11 +48,7 @@ export type MotionPromptInput = z.infer<typeof motionPromptInputSchema>;
 
 export const enrichPromptsRequestSchema = z
   .object({
-    claymationPrompt: z
-      .string()
-      .trim()
-      .min(1)
-      .max(maxTreatmentPromptLength),
+    claymationPrompt: z.string().trim().min(1).max(maxTreatmentPromptLength),
     motionPrompt: z
       .string()
       .trim()
@@ -119,7 +109,9 @@ export function composeStylePrompt(sections: PromptSections): string {
     sections.negativeDirection,
     sections.outputRequirement,
   ]
-    .filter((paragraph) => typeof paragraph === "string" && paragraph.length > 0)
+    .filter(
+      (paragraph) => typeof paragraph === "string" && paragraph.length > 0,
+    )
     .join("\n\n");
 }
 

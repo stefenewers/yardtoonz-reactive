@@ -24,7 +24,8 @@ describe("GET /api/style/palette", () => {
     expect(parsed.data.logo.width).toBeGreaterThan(0);
     expect(parsed.data.logo.palette.length).toBeGreaterThanOrEqual(4);
     expect(parsed.data.logo.conformance.verdict).toBe("CONFORMANT");
-    expect(parsed.data.tokenSet.version).toBe("clay-style-v1");
+    expect(parsed.data.tokenSet.version).toBe("clay-v1");
+    expect(parsed.data.brandAccents.length).toBe(3);
   });
 });
 
@@ -73,7 +74,8 @@ describe("POST /api/style/prompt", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          treatment: "A goat opens a dutch pot.",
+          claymationPrompt: "A goat opens a dutch pot.",
+          motionPrompt: "Goat grins wide.",
           creativeDirection: "Steam rises.",
         }),
       }),
@@ -83,9 +85,11 @@ describe("POST /api/style/prompt", () => {
     const body = (await response.json()) as {
       imagePrompt: string;
       motionPrompt?: string;
+      tokenSetVersion: string;
     };
     expect(body.imagePrompt).toContain("A goat opens a dutch pot.");
-    expect(body.motionPrompt).toContain("Steam rises.");
+    expect(body.motionPrompt).toContain("Goat grins wide.");
+    expect(body.tokenSetVersion).toBe("clay-v1");
   });
 
   it("rejects an invalid request body with a 400", async () => {
@@ -93,7 +97,7 @@ describe("POST /api/style/prompt", () => {
       new Request(apiUrl("prompt"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ treatment: "" }),
+        body: JSON.stringify({ claymationPrompt: "" }),
       }),
     );
 
@@ -106,7 +110,7 @@ describe("POST /api/style/prompt", () => {
 describe("request schema parity", () => {
   it("shares the prompt request contract with the route", () => {
     expect(
-      enrichPromptsRequestSchema.safeParse({ treatment: "x" }).success,
+      enrichPromptsRequestSchema.safeParse({ claymationPrompt: "x" }).success,
     ).toBe(true);
   });
 });

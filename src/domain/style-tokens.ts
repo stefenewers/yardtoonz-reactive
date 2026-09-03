@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 
 import {
@@ -166,8 +165,7 @@ export const clayStyleTokenSet: ClayStyleTokenSet = {
     {
       key: "warm-lighting",
       label: "Warm lighting",
-      directive:
-        "Use warm, cinematic lighting with clear subject separation.",
+      directive: "Use warm, cinematic lighting with clear subject separation.",
     },
     {
       key: "controlled-color",
@@ -437,7 +435,8 @@ export function checkPaletteConformance(
       (sum, factor) =>
         sum + tokenSet.factorWeights[factor.key] * factorScore(factor.status),
       0,
-    ) * (100 / totalWeight);
+    ) *
+    (100 / totalWeight);
 
   const verdict: ConformanceVerdict =
     score >= 85 ? "CONFORMANT" : score >= 50 ? "PARTIAL" : "OFF_BRAND";

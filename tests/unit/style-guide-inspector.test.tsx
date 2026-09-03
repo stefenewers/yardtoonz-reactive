@@ -7,12 +7,18 @@ import type {
   FixtureConformanceResponse,
   StyleGuideResponse,
 } from "../../src/domain/style-api";
+import type { PaletteColor } from "../../src/domain/style-palette";
 import {
+  brandAccentColors,
   checkPaletteConformance,
   clayStyleTokenSet,
-  fixtureImageName,
-  type PaletteColor,
 } from "../../src/domain/style-tokens";
+
+const fixturePaths = {
+  conformant: "brand/fixtures/clay-frame-conformant.png",
+  partial: "brand/fixtures/clay-frame-partial.png",
+  offbrand: "brand/fixtures/clay-frame-offbrand.png",
+} as const;
 
 function color(hex: string, rgb: PaletteColor["rgb"]): PaletteColor {
   return { hex, rgb, weight: 0.5, pixelCount: 500 };
@@ -21,11 +27,25 @@ function color(hex: string, rgb: PaletteColor["rgb"]): PaletteColor {
 const brandPalette: PaletteColor[] = [
   color("#ffd83d", { r: 255, g: 216, b: 61 }),
   color("#71d48c", { r: 113, g: 212, b: 140 }),
+  color("#ff746c", { r: 255, g: 116, b: 108 }),
+  color("#7a4a21", { r: 122, g: 74, b: 33 }),
+  color("#3c2d1e", { r: 60, g: 45, b: 30 }),
+  color("#171512", { r: 23, g: 21, b: 18 }),
+];
+
+/** Warm brand colors but too few for full tactile depth — scores PARTIAL. */
+const shallowPalette: PaletteColor[] = [
+  color("#ffd83d", { r: 255, g: 216, b: 61 }),
+  color("#ff746c", { r: 255, g: 116, b: 108 }),
+  color("#7a4a21", { r: 122, g: 74, b: 33 }),
+  color("#3c2d1e", { r: 60, g: 45, b: 30 }),
 ];
 
 const coolPalette: PaletteColor[] = [
   color("#00d0ff", { r: 0, g: 208, b: 255 }),
   color("#ff00e0", { r: 255, g: 0, b: 224 }),
+  color("#f2f2f2", { r: 242, g: 242, b: 242 }),
+  color("#0b0b0b", { r: 11, g: 11, b: 11 }),
 ];
 
 function frameReport(
@@ -36,7 +56,7 @@ function frameReport(
     name,
     label: `${name} fixture`,
     description: `Frame used to demonstrate the ${name} outcome.`,
-    path: fixtureImageName(name),
+    path: fixturePaths[name],
     width: 32,
     height: 18,
     palette,
@@ -49,13 +69,19 @@ const frameReports: Record<
   FixtureConformanceResponse
 > = {
   conformant: frameReport("conformant", brandPalette),
-  partial: frameReport("partial", [...brandPalette, ...coolPalette]),
+  partial: frameReport("partial", shallowPalette),
   offbrand: frameReport("offbrand", coolPalette),
 };
 
 function makeGuide(): StyleGuideResponse {
   return {
     tokenSet: clayStyleTokenSet,
+    brandAccents: brandAccentColors().map(({ key, rgb }) => ({
+      key,
+      hex: `#${[rgb.r, rgb.g, rgb.b]
+        .map((channel) => channel.toString(16).padStart(2, "0"))
+        .join("")}`,
+    })),
     logo: {
       path: "brand/yard-toonz-logo.png",
       width: 32,
@@ -99,8 +125,10 @@ describe("StyleGuideInspector", () => {
     expect(
       screen.getByRole("heading", { name: "Style guide inspector" }),
     ).toBeDefined();
-    expect(screen.getByText("#ffd83d")).toBeDefined();
-    expect(screen.getByText("Hand-built claymation")).toBeDefined();
+    expect(screen.getAllByText("#ffd83d").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/handcrafted stop-motion claymation/),
+    ).toBeDefined();
     expect(screen.getByText(clayStyleTokenSet.provenance)).toBeDefined();
     // Logo conformance is server-rendered and never waits on fetch.
     expect(screen.getAllByText("CONFORMANT").length).toBeGreaterThan(0);
@@ -120,15 +148,13 @@ describe("StyleGuideInspector", () => {
 
     renderInspector();
 
+    // Wait for every frame card to land before counting verdict chips —
+    // findAllByText returns on the first match (the server-rendered logo).
+    await screen.findByText("PARTIAL", { selector: ".verdict-chip" });
+    await screen.findByText("OFF_BRAND", { selector: ".verdict-chip" });
     expect(
-      await screen.findAllByText("CONFORMANT", { exact: false }),
+      screen.getAllByText("CONFORMANT", { selector: ".verdict-chip" }),
     ).toHaveLength(2);
-    expect(
-      await screen.findByText("PARTIAL", { selector: ".verdict-chip" }),
-    ).toBeDefined();
-    expect(
-      await screen.findByText("OFF_BRAND", { selector: ".verdict-chip" }),
-    ).toBeDefined();
     // Factor explanations surface under each frame card.
     expect(
       await screen.findAllByText(/Jamaican red\/yellow\/green palette/),
@@ -166,17 +192,11 @@ describe("StyleGuideInspector", () => {
     renderInspector();
     await screen.findAllByText(/Conformance check failed/);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Re-check fixtures" }),
-    );
-    expect(await screen.findAllByText("Checking conformance…")).toHaveLength(
-      3,
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Re-check fixtures" }));
+    expect(await screen.findAllByText("Checking conformance…")).toHaveLength(3);
 
     failing = false;
-    fireEvent.click(
-      screen.getByRole("button", { name: "Re-check fixtures" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Re-check fixtures" }));
     expect(
       await screen.findByText("PARTIAL", { selector: ".verdict-chip" }),
     ).toBeDefined();

@@ -53,7 +53,11 @@ function chunk(type: string, data: Uint8Array): Uint8Array {
     frame[4 + i] = type.charCodeAt(i);
   }
   frame.set(data, 8);
-  writeUint32(frame, 8 + data.length, crc32(frame.subarray(4, 8 + data.length)));
+  writeUint32(
+    frame,
+    8 + data.length,
+    crc32(frame.subarray(4, 8 + data.length)),
+  );
   return frame;
 }
 
@@ -110,15 +114,12 @@ export function unfilterRows(
   for (let row = 0; row < height; row += 1) {
     const filter = filtered[row * bytesPerRow]!;
     const lineStart = row * bytesPerRow + 1;
-    const previousStart = (row - 1) * bytesPerRow + 1;
     for (let x = 0; x < stride; x += 1) {
       const xSrc = filtered[lineStart + x]!;
       const left = x >= channels ? raw[row * stride + x - channels]! : 0;
       const up = row > 0 ? raw[(row - 1) * stride + x]! : 0;
       const upLeft =
-        row > 0 && x >= channels
-          ? raw[(row - 1) * stride + x - channels]!
-          : 0;
+        row > 0 && x >= channels ? raw[(row - 1) * stride + x - channels]! : 0;
       let value: number;
       switch (filter) {
         case 0:
@@ -158,17 +159,14 @@ export function unfilterRows(
 /** Decode a PNG buffer into an RGBA image. Throws on out-of-scope files. */
 export function decodePng(bytes: Uint8Array): RgbaImage {
   for (const [index, expected] of pngSignature.entries()) {
-    requireFormat(
-      bytes[index] === expected,
-      "The file is not a PNG image.",
-    );
+    requireFormat(bytes[index] === expected, "The file is not a PNG image.");
   }
 
   let chunkOffset = 8;
   let width = 0;
   let height = 0;
   let colorType = -1;
-  let idat: Uint8Array[] = [];
+  const idat: Uint8Array[] = [];
 
   while (chunkOffset + 8 <= bytes.length) {
     const dataLength = readUint32(bytes, chunkOffset);
@@ -180,10 +178,7 @@ export function decodePng(bytes: Uint8Array): RgbaImage {
     );
     const dataStart = chunkOffset + 8;
     const data = bytes.subarray(dataStart, dataStart + dataLength);
-    requireFormat(
-      data.length === dataLength,
-      "The PNG chunk is truncated.",
-    );
+    requireFormat(data.length === dataLength, "The PNG chunk is truncated.");
 
     if (type === "IHDR") {
       width = readUint32(data, 0);
@@ -218,9 +213,7 @@ export function decodePng(bytes: Uint8Array): RgbaImage {
   const channels = channelCount(colorType);
   let filtered: Uint8Array;
   try {
-    filtered = inflateSync(
-      idat.length === 1 ? idat[0]! : Buffer.concat(idat),
-    );
+    filtered = inflateSync(idat.length === 1 ? idat[0]! : Buffer.concat(idat));
   } catch (cause) {
     throw new PngFormatError("The PNG image data is corrupt.", {
       cause,
@@ -271,7 +264,10 @@ export function encodePng(image: RgbaImage): Uint8Array {
   const raw = new Uint8Array((stride + 1) * height);
   for (let row = 0; row < height; row += 1) {
     raw[row * (stride + 1)] = 0;
-    raw.set(pixels.subarray(row * stride, (row + 1) * stride), row * (stride + 1) + 1);
+    raw.set(
+      pixels.subarray(row * stride, (row + 1) * stride),
+      row * (stride + 1) + 1,
+    );
   }
   const idat = new Uint8Array(deflateSync(raw, { level: 9 }));
 
