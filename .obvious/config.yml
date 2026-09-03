@@ -1,0 +1,12 @@
+# Obvious repository policy — stefenewers/yardtoonz-reactive
+# Values auto-detected from GitHub repo settings at onboarding time (2026-09-03).
+
+# Default branch (from GitHub repo settings).
+defaultBranch: main
+
+# Merge method for automation PRs. All merge methods are enabled on this repo
+# (merge commit, squash, rebase); squash is selected to keep history linear.
+mergeMethod: squash
+
+# Require a human to click merge on PRs opened by automation.
+requireHumanMerge: true
