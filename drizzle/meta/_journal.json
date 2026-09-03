@@ -15,6 +15,13 @@
       "when": 1788455891030,
       "tag": "0001_complete_persistence_model",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788456690180,
+      "tag": "0002_add_worker_heartbeats",
+      "breakpoints": true
     }
   ]
 }
