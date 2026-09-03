@@ -4,7 +4,7 @@ import {
   type BetterSQLite3Database,
 } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 import * as schema from "./schema";
@@ -46,6 +46,81 @@ export function resolveSqliteFilename(
     throw new Error("DATABASE_URL contains invalid path encoding", { cause });
   }
   return path.resolve(workingDirectory, filename);
+}
+
+interface FileIdentity {
+  dev: number;
+  ino: number;
+}
+
+function readFileIdentity(filename: string): FileIdentity | undefined {
+  try {
+    const stats = statSync(filename);
+    return { dev: stats.dev, ino: stats.ino };
+  } catch {
+    // The file was removed (for example by a concurrent demo reset); the
+    // caller treats a missing file as a stale handle.
+    return undefined;
+  }
+}
+
+/**
+ * A database connection that stays fresh across demo resets.
+ *
+ * `demo:reset` deletes and recreates the SQLite file, so a long-lived server
+ * singleton holding one `openDatabase` handle would keep reading the deleted
+ * inode — pre-reset rows — for the rest of the process. The provider returns
+ * the same connection while the file on disk is still the one it opened, and
+ * silently reopens (migrations included) when the file was replaced.
+ */
+export interface DatabaseProvider {
+  getConnection(): DatabaseConnection;
+}
+
+export function createDatabaseProvider(
+  databaseUrl: string,
+  options: DatabaseOptions = {},
+): DatabaseProvider {
+  let connection: DatabaseConnection | undefined;
+  let openedIdentity: FileIdentity | undefined;
+
+  function openFresh(): DatabaseConnection {
+    connection?.sqlite.close();
+    connection = openDatabase(databaseUrl, options);
+    openedIdentity = readFileIdentity(
+      resolveSqliteFilename(
+        databaseUrl,
+        options.workingDirectory ?? process.cwd(),
+      ),
+    );
+    return connection;
+  }
+
+  return {
+    getConnection(): DatabaseConnection {
+      const filename = resolveSqliteFilename(
+        databaseUrl,
+        options.workingDirectory ?? process.cwd(),
+      );
+      // In-memory databases have no file identity to re-check; the handle
+      // lives and dies with this provider.
+      if (filename === ":memory:") {
+        connection ??= openDatabase(databaseUrl, options);
+        return connection;
+      }
+      const current = readFileIdentity(filename);
+      if (
+        connection &&
+        current &&
+        openedIdentity &&
+        current.dev === openedIdentity.dev &&
+        current.ino === openedIdentity.ino
+      ) {
+        return connection;
+      }
+      return openFresh();
+    },
+  };
 }
 
 export function openDatabase(

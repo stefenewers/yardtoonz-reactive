@@ -5,21 +5,30 @@ import {
   type ArtifactStore,
 } from "@/lib/artifact-store";
 import { env } from "@/lib/env";
-import { openDatabase } from "@/server/db/client";
+import {
+  createDatabaseProvider,
+  type DatabaseConnection,
+} from "@/server/db/client";
 
 import { createProductionRepository } from "./repository";
 import { createProductionWorkerRepository } from "./worker-repository";
 
 type ProductionRepository = ReturnType<typeof createProductionRepository>;
 
+// `demo:reset` replaces the database file between rehearsal runs; the provider
+// reopens the connection so a running web server never serves pre-reset rows.
+const databaseProvider = createDatabaseProvider(env.DATABASE_URL);
+
 let repository: ProductionRepository | undefined;
+let repositoryConnection: DatabaseConnection | undefined;
 let artifactStore: ArtifactStore | undefined;
 
 export function getProductionRepository(): ProductionRepository {
-  if (repository) return repository;
+  const connection = databaseProvider.getConnection();
+  if (repository && repositoryConnection === connection) return repository;
 
-  const { database } = openDatabase(env.DATABASE_URL);
-  repository = createProductionRepository(database);
+  repositoryConnection = connection;
+  repository = createProductionRepository(connection.database);
   return repository;
 }
 
@@ -33,6 +42,7 @@ export function getProductionArtifactStore(): ArtifactStore {
 let workerRepository:
   | ReturnType<typeof createProductionWorkerRepository>
   | undefined;
+let workerRepositoryConnection: DatabaseConnection | undefined;
 
 /**
  * Worker-pipeline persistence (stage leases, attempts, retry verification).
@@ -41,11 +51,14 @@ let workerRepository:
 export function getProductionWorkerRepository(): ReturnType<
   typeof createProductionWorkerRepository
 > {
-  if (workerRepository) return workerRepository;
+  const connection = databaseProvider.getConnection();
+  if (workerRepository && workerRepositoryConnection === connection) {
+    return workerRepository;
+  }
 
-  const { database } = openDatabase(env.DATABASE_URL);
+  workerRepositoryConnection = connection;
   workerRepository = createProductionWorkerRepository(
-    database,
+    connection.database,
     getProductionArtifactStore(),
   );
   return workerRepository;
