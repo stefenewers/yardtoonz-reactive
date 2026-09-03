@@ -490,6 +490,21 @@ export interface StageExecutorContext {
    */
   readonly creativeDirection?: string | null;
   /**
+   * Director treatment prompt for the clay style call, from the candidate's
+   * persisted treatment. The OpenAI STYLE_IMAGE executor sends it when the
+   * job's persisted imageProvider is OPENAI; it outranks the operator's
+   * free-form creative direction because it is the treatment's actual
+   * claymation instruction. Null when no treatment exists.
+   */
+  readonly claymationPrompt?: string | null;
+  /**
+   * Director treatment prompt for the motion call, from the candidate's
+   * persisted treatment. The Runway ANIMATE_IMAGE executor sends it as
+   * promptText when the job's persisted animationProvider is RUNWAY. Null
+   * when no treatment exists.
+   */
+  readonly motionPrompt?: string | null;
+  /**
    * Durable anchor for reconcile-before-retry: called as soon as a live
    * provider accepts a new request so a crash mid-poll still records it.
    */

@@ -21,6 +21,7 @@ import { createCandidateRepository } from "../../src/server/candidates/repositor
 import * as schema from "../../src/server/db/schema";
 import {
   artifacts,
+  directorTreatments,
   productions,
   productionStages,
 } from "../../src/server/db/schema";
@@ -845,6 +846,119 @@ describe("persisted provider combinations", () => {
       expect(
         artifactRows(harness, id).some((row) => row.kind === "STYLED_FRAME"),
       ).toBe(false);
+    },
+  );
+});
+
+describe("treatment prompt routing", () => {
+  const treatment = {
+    candidateId: candidateFixtures[0]!.id,
+    humorMechanism: "Expectation subversion.",
+    audienceReactionEvidence: [],
+    recommendedSegment: { startSeconds: 0, endSeconds: 6 },
+    setupTimestamp: 1.5,
+    payoffTimestamp: 4.2,
+    adaptationConcept: "Clay re-staging of the setup and payoff.",
+    claymationPrompt: "TREATMENT CLAY PROMPT",
+    motionPrompt: "TREATMENT MOTION PROMPT",
+    socialCaption: "Caption.",
+    confidence: 0.8,
+    risks: [],
+    evidenceGaps: [],
+  };
+
+  function seedTreatment(harness: ReturnType<typeof createHarness>): void {
+    harness.database
+      .insert(directorTreatments)
+      .values({
+        id: "treatment-routing",
+        candidateId: candidateFixtures[0]!.id,
+        provider: "MOCK",
+        treatmentJson: JSON.stringify(treatment),
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      .run();
+  }
+
+  it(
+    "passes the persisted treatment prompts to the STYLE_IMAGE and ANIMATE_IMAGE executor contexts",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "RUNWAY", "OPENAI");
+      seedTreatment(harness);
+
+      const defaults = createDefaultStageExecutors();
+      const styleContexts: {
+        claymationPrompt: string | null | undefined;
+        motionPrompt: string | null | undefined;
+      }[] = [];
+      const animateContexts: {
+        claymationPrompt: string | null | undefined;
+        motionPrompt: string | null | undefined;
+      }[] = [];
+      harness.executors = {
+        STYLE_IMAGE: async (context) => {
+          styleContexts.push({
+            claymationPrompt: context.claymationPrompt,
+            motionPrompt: context.motionPrompt,
+          });
+          return defaults.STYLE_IMAGE(context);
+        },
+        ANIMATE_IMAGE: async (context) => {
+          animateContexts.push({
+            claymationPrompt: context.claymationPrompt,
+            motionPrompt: context.motionPrompt,
+          });
+          return defaults.ANIMATE_IMAGE(context);
+        },
+      };
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expect(styleContexts).toHaveLength(1);
+      expect(styleContexts[0]).toEqual({
+        claymationPrompt: "TREATMENT CLAY PROMPT",
+        motionPrompt: "TREATMENT MOTION PROMPT",
+      });
+      expect(animateContexts).toHaveLength(1);
+      expect(animateContexts[0]).toEqual({
+        claymationPrompt: "TREATMENT CLAY PROMPT",
+        motionPrompt: "TREATMENT MOTION PROMPT",
+      });
+    },
+  );
+
+  it(
+    "leaves treatment prompts null when the candidate has no persisted treatment",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness);
+
+      const defaults = createDefaultStageExecutors();
+      const contexts: {
+        claymationPrompt: string | null | undefined;
+        motionPrompt: string | null | undefined;
+      }[] = [];
+      harness.executors = {
+        STYLE_IMAGE: async (context) => {
+          contexts.push({
+            claymationPrompt: context.claymationPrompt,
+            motionPrompt: context.motionPrompt,
+          });
+          return defaults.STYLE_IMAGE(context);
+        },
+      };
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expect(contexts).toHaveLength(1);
+      expect(contexts[0]).toEqual({
+        claymationPrompt: null,
+        motionPrompt: null,
+      });
     },
   );
 });

@@ -151,6 +151,40 @@ describe("createOpenAIImageStyleStageExecutor", () => {
     expect(recordedRequestIds).toEqual([]);
   });
 
+  it("sends the treatment claymation prompt ahead of the operator creative direction", async () => {
+    const { provider, prompts } = fakeProvider("req_stage_003");
+    const executor = createOpenAIImageStyleStageExecutor({
+      provider,
+      config: adapterConfig,
+    });
+
+    await executor(
+      context({
+        claymationPrompt: "TREATMENT CLAY PROMPT",
+        creativeDirection: "operator direction",
+      }),
+    );
+
+    expect(prompts).toEqual(["TREATMENT CLAY PROMPT"]);
+  });
+
+  it("falls back to the operator creative direction when the treatment has no clay prompt", async () => {
+    const { provider, prompts } = fakeProvider("req_stage_004");
+    const executor = createOpenAIImageStyleStageExecutor({
+      provider,
+      config: adapterConfig,
+    });
+
+    await executor(
+      context({
+        claymationPrompt: null,
+        creativeDirection: "operator direction",
+      }),
+    );
+
+    expect(prompts).toEqual(["operator direction"]);
+  });
+
   it("surfaces adapter failures as rejected stages with typed errors", async () => {
     const failingProvider: ImageStyleProvider = {
       name: "OPENAI",

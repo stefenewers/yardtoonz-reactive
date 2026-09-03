@@ -419,3 +419,78 @@ describe("Runway stage configuration", () => {
     ).toEqual({ apiKey: "k", model: "m" });
   });
 });
+
+describe("Runway motion prompt routing", () => {
+  it("sends the persisted treatment motion prompt as promptText ahead of creative direction", async () => {
+    const transport = scriptedTransport({
+      createResponses: [() => REQUEST_ID],
+      taskResponses: [
+        {
+          id: REQUEST_ID,
+          status: "SUCCEEDED",
+          output: ["https://cdn.example.com/out.mp4"],
+        },
+      ],
+      outputBytes: outputMp4Bytes,
+    });
+    const executor = createExecutor(transport);
+    const context = await buildContext({
+      motionPrompt: "TREATMENT MOTION PROMPT",
+      creativeDirection: "operator direction",
+    });
+
+    await executor(context);
+
+    expect(transport.calls.createdInputs[0]?.promptText).toBe(
+      "TREATMENT MOTION PROMPT",
+    );
+  });
+
+  it("falls back to the operator creative direction when the treatment has no motion prompt", async () => {
+    const transport = scriptedTransport({
+      createResponses: [() => REQUEST_ID],
+      taskResponses: [
+        {
+          id: REQUEST_ID,
+          status: "SUCCEEDED",
+          output: ["https://cdn.example.com/out.mp4"],
+        },
+      ],
+      outputBytes: outputMp4Bytes,
+    });
+    const executor = createExecutor(transport);
+    const context = await buildContext({
+      motionPrompt: null,
+      creativeDirection: "operator direction",
+    });
+
+    await executor(context);
+
+    expect(transport.calls.createdInputs[0]?.promptText).toBe(
+      "operator direction",
+    );
+  });
+
+  it("omits promptText when neither the treatment nor creative direction is present", async () => {
+    const transport = scriptedTransport({
+      createResponses: [() => REQUEST_ID],
+      taskResponses: [
+        {
+          id: REQUEST_ID,
+          status: "SUCCEEDED",
+          output: ["https://cdn.example.com/out.mp4"],
+        },
+      ],
+      outputBytes: outputMp4Bytes,
+    });
+    const executor = createExecutor(transport);
+    const context = await buildContext({
+      motionPrompt: null,
+      creativeDirection: null,
+    });
+
+    await executor(context);
+
+    expect(transport.calls.createdInputs[0]?.promptText).toBeUndefined();
+  });
+});

@@ -394,6 +394,8 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
       upstream,
       store: input.store,
       creativeDirection: state.production.creativeDirection,
+      claymationPrompt: state.treatmentPrompts.claymationPrompt,
+      motionPrompt: state.treatmentPrompts.motionPrompt,
       priorProviderRequestId: findPriorProviderRequestId(state, stage),
       recordProviderRequestId: async (requestId) =>
         repository.recordStageProviderRequestId({
