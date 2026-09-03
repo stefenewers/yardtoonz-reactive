@@ -147,7 +147,10 @@ describe("ProductionSetup", () => {
   it("creates the production, links persisted rights, and lists the start gates", async () => {
     const fetchMock = installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(200, makeDetail({}));
@@ -157,7 +160,7 @@ describe("ProductionSetup", () => {
 
     render(<ProductionSetup {...defaultProps()} />);
 
-    await screen.findByText("Rights confirmed");
+    await screen.findByText("Linked to the persisted candidate confirmation.");
 
     const createCall = findCall(fetchMock, "/api/productions", "POST");
     expect(createCall).toBeDefined();
@@ -191,7 +194,10 @@ describe("ProductionSetup", () => {
   it("shows why the rights gate is closed when the candidate confirmation is missing", async () => {
     installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(409, {
@@ -225,7 +231,10 @@ describe("ProductionSetup", () => {
   it("rejects non-MP4 selections locally without uploading", async () => {
     const fetchMock = installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(200, makeDetail({}));
@@ -237,7 +246,9 @@ describe("ProductionSetup", () => {
     });
 
     render(<ProductionSetup {...defaultProps()} />);
-    await screen.findByText("Rights confirmed");
+    const uploadInput = await screen.findByLabelText(
+      "Authorized source clip (MP4)",
+    );
 
     const quicktime = new File([new Uint8Array(512)], "clip.mov", {
       type: "video/quicktime",
@@ -261,7 +272,10 @@ describe("ProductionSetup", () => {
   it("uploads a valid source, shows probed facts, and unlocks start", async () => {
     installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(200, makeDetail({}));
@@ -276,9 +290,11 @@ describe("ProductionSetup", () => {
     });
 
     const { container } = render(<ProductionSetup {...defaultProps()} />);
-    await screen.findByText("Rights confirmed");
+    const uploadInput = await screen.findByLabelText(
+      "Authorized source clip (MP4)",
+    );
 
-    fireEvent.change(screen.getByLabelText("Authorized source clip (MP4)"), {
+    fireEvent.change(uploadInput, {
       target: { files: [pickMp4File()] },
     });
 
@@ -299,7 +315,10 @@ describe("ProductionSetup", () => {
   it("explains segment problems and keeps start locked until the draft is valid", async () => {
     installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(200, makeDetail({}));
@@ -314,9 +333,11 @@ describe("ProductionSetup", () => {
     });
 
     render(<ProductionSetup {...defaultProps()} />);
-    await screen.findByText("Rights confirmed");
+    const uploadInput = await screen.findByLabelText(
+      "Authorized source clip (MP4)",
+    );
 
-    fireEvent.change(screen.getByLabelText("Authorized source clip (MP4)"), {
+    fireEvent.change(uploadInput, {
       target: { files: [pickMp4File()] },
     });
     await screen.findByText("12.4s");
@@ -352,7 +373,10 @@ describe("ProductionSetup", () => {
   it("persists the segment and creative direction, then queues the production", async () => {
     const fetchMock = installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(200, makeDetail({}));
@@ -367,15 +391,23 @@ describe("ProductionSetup", () => {
         url === "/api/productions/prod-e51/start" &&
         init?.method === "POST"
       ) {
-        return jsonResponse(200, makeDetail({ queued: true, withSource: true }));
+        return jsonResponse(
+          200,
+          makeDetail({ queued: true, withSource: true }),
+        );
       }
       throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
     });
 
     render(<ProductionSetup {...defaultProps()} />);
-    await screen.findByText("Rights confirmed");
+    // The rights-link PATCH must land before start so patch ordering is
+    // deterministic.
+    await screen.findByText("Linked to the persisted candidate confirmation.");
+    const uploadInput = await screen.findByLabelText(
+      "Authorized source clip (MP4)",
+    );
 
-    fireEvent.change(screen.getByLabelText("Authorized source clip (MP4)"), {
+    fireEvent.change(uploadInput, {
       target: { files: [pickMp4File()] },
     });
     await screen.findByText("12.4s");
@@ -409,7 +441,10 @@ describe("ProductionSetup", () => {
   it("surfaces the API's start-gate message when start is refused", async () => {
     installFetch(async (url, init) => {
       if (url === "/api/productions" && init?.method === "POST") {
-        return jsonResponse(201, makeDetail({ production: { status: "DRAFT" } }));
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
       }
       if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
         return jsonResponse(200, makeDetail({}));
@@ -435,9 +470,11 @@ describe("ProductionSetup", () => {
     });
 
     render(<ProductionSetup {...defaultProps()} />);
-    await screen.findByText("Rights confirmed");
+    const uploadInput = await screen.findByLabelText(
+      "Authorized source clip (MP4)",
+    );
 
-    fireEvent.change(screen.getByLabelText("Authorized source clip (MP4)"), {
+    fireEvent.change(uploadInput, {
       target: { files: [pickMp4File()] },
     });
     await screen.findByText("12.4s");

@@ -27,10 +27,15 @@ interface CandidateWorkspaceProps {
   maxUploadMb: number;
 }
 
+interface ProviderDisclosureProps {
+  imageProvider: ImageProvider;
+  animationProvider: AnimationProvider;
+}
+
 function ProviderDisclosure({
   imageProvider,
   animationProvider,
-}: CandidateWorkspaceProps) {
+}: ProviderDisclosureProps) {
   return (
     <dl className="provider-strip" aria-label="Configured production providers">
       <div>
@@ -348,8 +353,8 @@ export function CandidateWorkspace({
                     and selected audio.
                   </strong>
                   <small>
-                    This decision is timestamped and stored before any upload
-                    or processing.
+                    This decision is timestamped and stored before any upload or
+                    processing.
                   </small>
                 </span>
               </label>

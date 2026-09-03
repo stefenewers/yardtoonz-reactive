@@ -17,8 +17,9 @@ export class ProductionApiError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
   }
 }
 
@@ -31,6 +32,7 @@ const unavailableError = (cause: unknown) =>
   new ProductionApiError(
     "PRODUCTION_UNAVAILABLE",
     "The production service could not be reached. Try again.",
+    { cause },
   );
 
 async function parsePayload<T>(
@@ -47,9 +49,7 @@ async function parsePayload<T>(
   if (!response.ok) {
     const apiError = productionErrorResponseSchema.safeParse(payload);
     throw new ProductionApiError(
-      apiError.success
-        ? apiError.data.error.code
-        : "PRODUCTION_REQUEST_FAILED",
+      apiError.success ? apiError.data.error.code : "PRODUCTION_REQUEST_FAILED",
       apiError.success
         ? apiError.data.error.message
         : "The production service rejected the request.",

@@ -75,50 +75,52 @@ export function ProductionSetup({
   // Single-flight per instance: Strict Mode remounts must not create a
   // second DRAFT production for the candidate.
   const initializeRef = useRef(false);
-
-  async function initialize() {
-    if (initializeRef.current) return;
-    initializeRef.current = true;
-    setCreationError(undefined);
-    setRightsProblem(undefined);
-    try {
-      const created = await client.createProduction({
-        candidateId,
-        segment: defaultSegment,
-        imageProvider,
-        animationProvider,
-      });
-      setProduction(created);
-      try {
-        setProduction(
-          await client.updateSetup(created.production.id, {
-            rights: {
-              confirmed: true,
-              confirmationTextVersion: rightsConfirmationTextVersion,
-            },
-          }),
-        );
-      } catch (linkError) {
-        setRightsProblem(
-          linkError instanceof Error
-            ? linkError.message
-            : "Rights could not be confirmed for this production.",
-        );
-      }
-    } catch (createError) {
-      initializeRef.current = false;
-      setCreationError(
-        createError instanceof Error
-          ? createError.message
-          : "The production could not be created. Try again.",
-      );
-    }
-  }
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
-    void initialize();
+    if (initializeRef.current) return;
+    initializeRef.current = true;
+
+    async function bootstrap() {
+      try {
+        const created = await client.createProduction({
+          candidateId,
+          segment: defaultSegment,
+          imageProvider,
+          animationProvider,
+        });
+        setProduction(created);
+        try {
+          setProduction(
+            await client.updateSetup(created.production.id, {
+              rights: {
+                confirmed: true,
+                confirmationTextVersion: rightsConfirmationTextVersion,
+              },
+            }),
+          );
+        } catch (linkError) {
+          setRightsProblem(
+            linkError instanceof Error
+              ? linkError.message
+              : "Rights could not be confirmed for this production.",
+          );
+        }
+      } catch (createError) {
+        initializeRef.current = false;
+        setCreationError(
+          createError instanceof Error
+            ? createError.message
+            : "The production could not be created. Try again.",
+        );
+      }
+    }
+
+    void bootstrap();
+    // Retries re-run via retryToken; candidate identity and providers are
+    // fixed for the life of this component instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryToken]);
 
   useEffect(() => {
     return () => {
@@ -297,7 +299,13 @@ export function ProductionSetup({
               <strong>Setup could not start</strong>
               <p>{creationError}</p>
             </div>
-            <button type="button" onClick={() => void initialize()}>
+            <button
+              type="button"
+              onClick={() => {
+                setCreationError(undefined);
+                setRetryToken((token) => token + 1);
+              }}
+            >
               Try again
             </button>
           </div>
