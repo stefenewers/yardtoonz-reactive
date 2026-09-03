@@ -80,14 +80,20 @@ export type OpenAIImageAdapterSelection =
 
 /**
  * Resolves adapter configuration from validated environment values. Returns
- * `{ selected: false }` when the image provider is not OPENAI, and fails fast
- * with a typed error when OPENAI is selected without both required settings.
- * This is defense in depth on top of the startup environment schema.
+ * `{ selected: false }` when OPENAI is not the selection, and fails fast with
+ * a typed error when OPENAI is selected without both required settings. This
+ * is defense in depth on top of the startup environment schema.
+ *
+ * `selection` is explicit so callers can validate a production's PERSISTED
+ * image provider regardless of the environment default: a job persisted with
+ * imageProvider=OPENAI must resolve live credentials even when the worker
+ * environment's own IMAGE_PROVIDER is MOCK.
  */
 export function resolveOpenAIImageAdapterConfig(
   environment: OpenAIImageAdapterEnvironment,
+  selection: string = environment.IMAGE_PROVIDER,
 ): OpenAIImageAdapterSelection {
-  if (environment.IMAGE_PROVIDER !== "OPENAI") {
+  if (selection !== "OPENAI") {
     return { selected: false };
   }
 
