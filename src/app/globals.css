@@ -1384,3 +1384,102 @@ input:focus-visible {
 .setup-card .secondary-button {
   width: 100%;
 }
+
+/* Storyboard strip (/candidates/[id]/storyboard) */
+
+.storyboard-status {
+  margin: 1.5rem 0;
+  color: var(--text-muted);
+}
+
+.storyboard-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 1.5rem;
+}
+
+.storyboard-chip {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.storyboard-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.storyboard-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-raised);
+}
+
+.storyboard-frame-beat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  font-weight: 700;
+}
+
+.storyboard-frame-beat span {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.storyboard-frame-timing {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.storyboard-frame-timing span {
+  color: var(--text-muted);
+}
+
+.storyboard-frame-move {
+  margin: 0;
+  align-self: flex-start;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 216 61 / 14%);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.storyboard-frame-motion {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.storyboard-frame-prompt {
+  margin: auto 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .storyboard-strip {
+    grid-template-columns: 1fr;
+  }
+}
