@@ -89,24 +89,33 @@ export function createScoutRunService(deps: ScoutRunServiceDeps) {
       : deps.providers;
   }
 
-  function run(request: RunScoutRequest): FeedRunResource {
+  function run(request?: RunScoutRequest): FeedRunResource {
     const startedAt = now().toISOString();
-    const providers = selectProviders(request.themes);
+    const providers = selectProviders(request?.themes);
     const themes = providers.map((provider) => provider.theme);
 
-    const finishFailed = (failure: RunFailure): FeedRunResource => ({
-      id: `run_${randomUUID()}`,
-      themes,
-      status: "FAILED",
-      discoveredCount: 0,
-      duplicateCount: 0,
-      importedCount: 0,
-      importedCandidateIds: [],
-      errorCode: failure.code,
-      safeErrorMessage: truncateSafeMessage(failure.message),
-      startedAt,
-      completedAt: now().toISOString(),
-    });
+    // Failed runs persist too: the inbox header reports the last run's
+    // status, and an editor must see that the desk tried and failed.
+    const finishFailed = (failure: RunFailure): FeedRunResource => {
+      const run: FeedRunResource = {
+        id: `run_${randomUUID()}`,
+        themes,
+        status: "FAILED",
+        discoveredCount: 0,
+        duplicateCount: 0,
+        importedCount: 0,
+        importedCandidateIds: [],
+        errorCode: failure.code,
+        safeErrorMessage: truncateSafeMessage(failure.message),
+        startedAt,
+        completedAt: now().toISOString(),
+      };
+      deps.feedRunRepository.create({
+        run,
+        sourceKind: deps.providers[0]!.kind,
+      });
+      return run;
+    };
 
     // Validate every selected feed against the Trend Feed contract before
     // touching the repository; one malformed provider fails the whole run

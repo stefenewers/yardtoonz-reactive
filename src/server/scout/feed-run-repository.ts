@@ -54,20 +54,23 @@ export function createFeedRunRepository(database: Database): FeedRunRepository {
     create({ run, sourceKind }) {
       // sourceKind is an audit-trail column for future provider kinds; the
       // served resource omits it.
-      database.insert(feedRuns).values({
-        id: run.id,
-        themesJson: JSON.stringify(run.themes),
-        status: run.status,
-        sourceKind,
-        discoveredCount: run.discoveredCount,
-        duplicateCount: run.duplicateCount,
-        importedCount: run.importedCount,
-        importedCandidateIdsJson: JSON.stringify(run.importedCandidateIds),
-        errorCode: run.errorCode ?? null,
-        safeErrorMessage: run.safeErrorMessage ?? null,
-        startedAt: new Date(run.startedAt),
-        completedAt: new Date(run.completedAt),
-      });
+      database
+        .insert(feedRuns)
+        .values({
+          id: run.id,
+          themesJson: JSON.stringify(run.themes),
+          status: run.status,
+          sourceKind,
+          discoveredCount: run.discoveredCount,
+          duplicateCount: run.duplicateCount,
+          importedCount: run.importedCount,
+          importedCandidateIdsJson: JSON.stringify(run.importedCandidateIds),
+          errorCode: run.errorCode ?? null,
+          safeErrorMessage: run.safeErrorMessage ?? null,
+          startedAt: new Date(run.startedAt),
+          completedAt: new Date(run.completedAt),
+        })
+        .run();
     },
 
     list() {

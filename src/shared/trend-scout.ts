@@ -98,6 +98,12 @@ export const listScoutRunsResponseSchema = z
   .strict()
   .readonly();
 
+/** The latest run, or `run: null` before the first scout run. */
+export const latestScoutRunResponseSchema = z
+  .object({ run: feedRunResourceSchema.nullable() })
+  .strict()
+  .readonly();
+
 export const scoutApiErrorCodes = [
   "INVALID_REQUEST",
   "INTERNAL_ERROR",
