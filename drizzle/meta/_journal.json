@@ -40,15 +40,8 @@
     {
       "idx": 5,
       "version": "6",
-      "when": 1788474334491,
-      "tag": "0005_director_run_attribution_columns",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1788474349990,
-      "tag": "0006_director_provider_openai_check",
+      "when": 1788474246132,
+      "tag": "0005_add_agent_runs",
       "breakpoints": true
     },
     {
