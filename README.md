@@ -47,6 +47,12 @@ SQLite migrations create the six specification tables for candidates, comments, 
 
 `npm run db:reset` removes only the configured database, SQLite sidecar files, and artifact directory when all paths resolve inside the application directory. It then applies every migration and loads the deterministic candidate fixtures. The command refuses in-memory databases, repository-root deletion, and paths outside the application directory.
 
+## Candidate intake
+
+Candidate intake plugs into a provider interface (`src/server/candidates/intake.ts`) with three implementations, matching the no-scraping MVP constraint: `SEEDED` (the validated fixtures in `fixtures/candidates.ts`), `CSV` (uploaded text), and `MANUAL` (a single entry). `importCandidates` validates every payload with Zod, computes scores through the shared scoring domain, refuses duplicate ids, and persists each batch in one transaction without touching existing candidates or comments — importing zero rows is a no-op, and a failed import leaves data unchanged.
+
+The CSV provider accepts a header row plus one row per candidate. Required columns: `platform`, `sourceLabel`, `caption`, `observedAt`, and the six fit-checklist booleans (`clearPremise`, `recognizableScenario`, `payoffWithinEightSeconds`, `authorizedAudio`, `visuallySimple`, `culturallyRelevant`). Optional columns: `id` (generated when omitted), `sourceUrl`, `publishedAt`, `views`, `likes`, `comments`, `shares`, `saves`, `adaptationNote`, and `commentExcerpts` — multiple excerpts ride in one cell separated by `;;`. Unknown or missing columns are rejected with the offending column names.
+
 ## Environment validation
 
 Server configuration is parsed by Zod in `src/lib/env-schema.ts` and loaded only through `src/lib/env.ts`. Invalid numeric values fail startup. Image and animation providers are selected independently, so mock/mock, OpenAI/mock, mock/Runway, and OpenAI/Runway configurations are representable. OpenAI settings are required only when `IMAGE_PROVIDER=OPENAI`; Runway settings are required only when `ANIMATION_PROVIDER=RUNWAY`. Live adapters remain intentionally outside this PR.
