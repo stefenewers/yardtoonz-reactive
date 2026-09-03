@@ -8,7 +8,7 @@ import {
   type Candidate,
   type ScoreEvidence,
 } from "@/domain/candidate";
-import { createMockCandidateClient } from "@/lib/candidate-client";
+import { createApiCandidateClient } from "@/lib/candidate-client";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import { ProductionStudio } from "@/app/produce/production-studio";
 
@@ -73,7 +73,7 @@ export function CandidateWorkspace({
   imageProvider,
   animationProvider,
 }: CandidateWorkspaceProps) {
-  const client = useMemo(() => createMockCandidateClient(), []);
+  const client = useMemo(() => createApiCandidateClient(), []);
   const [screen, setScreen] = useState<Screen>("inbox");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState<Candidate>();

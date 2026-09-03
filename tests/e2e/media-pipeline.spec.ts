@@ -49,7 +49,7 @@ test("authorized MP4 becomes a previewable and downloadable mock cartoon", async
   await page.getByRole("button", { name: "Load demo candidates" }).click();
   await page
     .getByRole("button", {
-      name: /One phone call turns a quiet reasoning into pure yard chaos/,
+      name: /The bus finally arrives just as everybody gives up waiting/,
     })
     .click();
   await page.getByRole("button", { name: "Approve for production" }).click();
