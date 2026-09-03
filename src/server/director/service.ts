@@ -19,12 +19,18 @@ import {
   type OpenAIDirectorTreatmentResult,
 } from "@/lib/openai-director-adapter";
 
+import { directorRunEvidence } from "@/domain/agent-trace";
 import type { CandidateRepository } from "@/server/candidates/repository";
 import { getCandidateRepository } from "@/server/candidates/service";
 import { createDatabaseProvider } from "@/server/db/client";
+import { insertAgentRun } from "@/server/agents/trace";
 
 import { createDirectorTreatmentRepository } from "./repository";
 import type { DirectorTreatmentRepository } from "./repository";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import type * as schema from "@/server/db/schema";
+
+type Database = BetterSQLite3Database<typeof schema>;
 
 /**
  * Typed failures the Director API maps to stable error codes. LIVE runs
@@ -64,6 +70,41 @@ export interface DirectorTreatmentServiceDeps {
   selection?: DirectorProvider;
   /** Constructed LIVE provider; required when selection is "OPENAI". */
   liveProvider?: OpenAIDirectorTreatmentProvider;
+  /** Same database the repositories use — the Director trace writes here. */
+  database: Database;
+}
+
+/**
+ * Director trace row: written once per created treatment — idempotent
+ * replays return early and never duplicate rows. The decision is the
+ * treatment's concept and the confidence is the treatment's own; elapsed
+ * covers the treatment build (mock) or the live provider round-trip
+ * (OpenAI), and the provider is the one that actually produced it.
+ */
+function recordDirectorRun(
+  deps: DirectorTreatmentServiceDeps,
+  input: {
+    candidateId: string;
+    provider: "MOCK" | "OPENAI";
+    evidence: Omit<Parameters<typeof directorRunEvidence>[0], "provider">;
+    created: DirectorTreatmentResource;
+    elapsedMs: number;
+  },
+): void {
+  insertAgentRun(deps.database, {
+    agentKey: "yardtoonz-director",
+    state: "COMPLETE",
+    inputEvidence: directorRunEvidence({
+      ...input.evidence,
+      provider: input.provider,
+    }),
+    decision: input.created.treatment.adaptationConcept,
+    confidence: input.created.treatment.confidence,
+    provider: input.provider,
+    elapsedMs: input.elapsedMs,
+    candidateId: input.candidateId,
+    now: new Date(),
+  });
 }
 
 export function createDirectorTreatmentService(
@@ -91,6 +132,7 @@ export function createDirectorTreatmentService(
       );
       if (existing) return existing;
 
+      const startedAtMs = Date.now();
       const treatmentInput = directorTreatmentInputSchema.parse({
         candidateId: candidate.id,
         caption: candidate.caption,
@@ -102,6 +144,17 @@ export function createDirectorTreatmentService(
         keyframes: request.keyframes,
         creativeDirection: request.creativeDirection,
       });
+
+      const traceEvidence = {
+        metrics: candidate.metrics,
+        commentCount: candidate.commentExcerpts.length,
+        adaptationNoteSupplied: candidate.adaptationNote !== undefined,
+        transcriptSupplied: request.transcript !== undefined,
+        sourceVideoMetadataSupplied:
+          request.sourceVideoMetadata !== undefined,
+        keyframeCount: request.keyframes?.length ?? 0,
+        creativeDirectionSupplied: request.creativeDirection !== undefined,
+      };
 
       if ((deps.selection ?? "MOCK") === "OPENAI") {
         const liveProvider = deps.liveProvider;
@@ -122,7 +175,7 @@ export function createDirectorTreatmentService(
           throw translateAdapterError(error);
         }
 
-        return deps.treatmentRepository.createTreatment({
+        const created = deps.treatmentRepository.createTreatment({
           id: `treat_${candidate.id}`,
           candidateId: candidate.id,
           provider: "OPENAI",
@@ -131,11 +184,21 @@ export function createDirectorTreatmentService(
           treatment: result.treatment,
           now: new Date(),
         });
+
+        recordDirectorRun(deps, {
+          candidateId: candidate.id,
+          provider: "OPENAI",
+          evidence: traceEvidence,
+          created,
+          elapsedMs: Math.max(0, Date.now() - startedAtMs),
+        });
+
+        return created;
       }
 
       const treatment = buildMockDirectorTreatment(treatmentInput);
 
-      return deps.treatmentRepository.createTreatment({
+      const created = deps.treatmentRepository.createTreatment({
         id: `treat_${candidate.id}`,
         candidateId: candidate.id,
         provider: "MOCK",
@@ -144,6 +207,34 @@ export function createDirectorTreatmentService(
         treatment,
         now: new Date(),
       });
+
+      // Director trace: written once per created treatment — idempotent
+      // replays return early above and never duplicate rows. Elapsed is the
+      // measured build time; the decision is the treatment's concept and the
+      // confidence the treatment itself reported.
+      insertAgentRun(deps.database, {
+        agentKey: "yardtoonz-director",
+        state: "COMPLETE",
+        inputEvidence: directorRunEvidence({
+          provider: "MOCK",
+          metrics: candidate.metrics,
+          commentCount: candidate.commentExcerpts.length,
+          adaptationNoteSupplied: candidate.adaptationNote !== undefined,
+          transcriptSupplied: request.transcript !== undefined,
+          sourceVideoMetadataSupplied:
+            request.sourceVideoMetadata !== undefined,
+          keyframeCount: request.keyframes?.length ?? 0,
+          creativeDirectionSupplied: request.creativeDirection !== undefined,
+        }),
+        decision: created.treatment.adaptationConcept,
+        confidence: created.treatment.confidence,
+        provider: "MOCK",
+        elapsedMs: Math.max(0, Date.now() - startedAtMs),
+        candidateId: candidate.id,
+        now: new Date(),
+      });
+
+      return created;
     },
 
     get(id: string): DirectorTreatmentResource | undefined {
@@ -198,6 +289,7 @@ export function getDirectorTreatmentService(): DirectorTreatmentService {
     treatmentRepository: createDirectorTreatmentRepository(connection.database),
     selection: env.DIRECTOR_PROVIDER,
     liveProvider,
+    database: connection.database,
   });
   return service;
 }

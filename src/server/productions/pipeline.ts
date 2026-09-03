@@ -1,5 +1,5 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { z } from "zod";
@@ -581,7 +581,13 @@ async function buildStageArtifactMetadata(
         await probeMediaFile(await context.store.resolve(storageKey)),
       );
       return kind === "SILENT_ANIMATION"
-        ? { ...metadata, motion: "zoompan", fps: 24 }
+        ? {
+            ...metadata,
+            motion: "zoompan",
+            fps: 24,
+            // Deterministic pipeline version — the trace's honest model label.
+            motionVersion: stageFingerprintVersions.ANIMATE_IMAGE,
+          }
         : {
             ...metadata,
             segmentStartSeconds: context.segment.startMs / 1000,

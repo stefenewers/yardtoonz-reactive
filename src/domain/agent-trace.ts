@@ -1,6 +1,7 @@
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import type { ValidationReport } from "@/domain/production";
 import { SCORING_VERSION } from "@/domain/scoring";
+import type { EngagementMetrics } from "@/shared/candidates";
 
 /**
  * Pure vocabulary and mapping for the persisted agent-run trace. Every named
@@ -47,7 +48,9 @@ const agentStages = {
 
 /** The named agent that owns a pipeline stage's work, or null for unmapped stages. */
 export function agentKeyForStage(stageName: string): AgentKey | null {
-  return (agentStages as Record<string, AgentKey | undefined>)[stageName] ?? null;
+  return (
+    (agentStages as Record<string, AgentKey | undefined>)[stageName] ?? null
+  );
 }
 
 /**
@@ -139,7 +142,7 @@ export function humorAnalystEvidence(input: {
 /** Evidence the Director treatment was built from — presence flags, never content. */
 export function directorRunEvidence(input: {
   readonly provider: AgentRunProvider;
-  readonly metricCount: number;
+  readonly metrics: EngagementMetrics;
   readonly commentCount: number;
   readonly adaptationNoteSupplied: boolean;
   readonly transcriptSupplied: boolean;
@@ -147,7 +150,18 @@ export function directorRunEvidence(input: {
   readonly keyframeCount: number;
   readonly creativeDirectionSupplied: boolean;
 }): AgentRunEvidence {
-  return { ...input };
+  return {
+    provider: input.provider,
+    metricCount: Object.values(input.metrics).filter(
+      (value) => value !== undefined,
+    ).length,
+    commentCount: input.commentCount,
+    adaptationNoteSupplied: input.adaptationNoteSupplied,
+    transcriptSupplied: input.transcriptSupplied,
+    sourceVideoMetadataSupplied: input.sourceVideoMetadataSupplied,
+    keyframeCount: input.keyframeCount,
+    creativeDirectionSupplied: input.creativeDirectionSupplied,
+  };
 }
 
 /** Evidence for a stage-produced run: the deterministic input fingerprint. */
@@ -168,4 +182,57 @@ export function validationRunEvidence(
     durationSeconds: report.durationSeconds,
     audioPresent: report.audioPresent,
   };
+}
+
+/** Decision text for a completed pipeline stage's named-agent run. */
+export function stageCompleteDecision(input: {
+  readonly stageName: string;
+  readonly provider: AgentRunProvider | null;
+  readonly validationReport?: ValidationReport;
+}): string | undefined {
+  switch (input.stageName) {
+    case "STYLE_IMAGE":
+      return input.provider
+        ? styledFrameRunDecision(input.provider)
+        : undefined;
+    case "ANIMATE_IMAGE":
+      return input.provider
+        ? animatedFrameRunDecision(input.provider)
+        : undefined;
+    case "VALIDATE_OUTPUT":
+      return input.validationReport
+        ? validationRunDecision(input.validationReport)
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/** Evidence a completed stage run actually had: fingerprint plus QA scalars. */
+export function stageCompleteEvidence(input: {
+  readonly stageName: string;
+  readonly fingerprint: string;
+  readonly validationReport?: ValidationReport;
+}): AgentRunEvidence {
+  const base = stageRunEvidence({ fingerprint: input.fingerprint });
+  if (input.stageName === "VALIDATE_OUTPUT" && input.validationReport) {
+    return { ...base, ...validationRunEvidence(input.validationReport) };
+  }
+  return base;
+}
+
+/**
+ * Self-reported confidence for a completed stage run: the QA Inspector's
+ * pass is a deterministic constraint check (certain); creative agents
+ * report none and persist null.
+ */
+export function stageCompleteConfidence(stageName: string): number | undefined {
+  return stageName === "VALIDATE_OUTPUT" ? 1 : undefined;
+}
+
+/** Evidence for a failed stage run: the bounded error classification. */
+export function stageFailedEvidence(input: {
+  readonly errorCode: string;
+}): AgentRunEvidence {
+  return { errorCode: input.errorCode };
 }

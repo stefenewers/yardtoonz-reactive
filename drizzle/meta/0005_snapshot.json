@@ -118,16 +118,12 @@
       "indexes": {
         "agent_runs_candidate_id_idx": {
           "name": "agent_runs_candidate_id_idx",
-          "columns": [
-            "candidate_id"
-          ],
+          "columns": ["candidate_id"],
           "isUnique": false
         },
         "agent_runs_production_id_idx": {
           "name": "agent_runs_production_id_idx",
-          "columns": [
-            "production_id"
-          ],
+          "columns": ["production_id"],
           "isUnique": false
         }
       },
@@ -136,12 +132,8 @@
           "name": "agent_runs_candidate_id_candidates_id_fk",
           "tableFrom": "agent_runs",
           "tableTo": "candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -149,12 +141,8 @@
           "name": "agent_runs_production_id_productions_id_fk",
           "tableFrom": "agent_runs",
           "tableTo": "productions",
-          "columnsFrom": [
-            "production_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["production_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -290,23 +278,17 @@
       "indexes": {
         "artifacts_storage_key_unique": {
           "name": "artifacts_storage_key_unique",
-          "columns": [
-            "storage_key"
-          ],
+          "columns": ["storage_key"],
           "isUnique": true
         },
         "artifacts_production_id_idx": {
           "name": "artifacts_production_id_idx",
-          "columns": [
-            "production_id"
-          ],
+          "columns": ["production_id"],
           "isUnique": false
         },
         "artifacts_production_stage_id_idx": {
           "name": "artifacts_production_stage_id_idx",
-          "columns": [
-            "production_stage_id"
-          ],
+          "columns": ["production_stage_id"],
           "isUnique": false
         }
       },
@@ -315,12 +297,8 @@
           "name": "artifacts_production_id_productions_id_fk",
           "tableFrom": "artifacts",
           "tableTo": "productions",
-          "columnsFrom": [
-            "production_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["production_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -328,14 +306,8 @@
           "name": "artifacts_stage_production_fk",
           "tableFrom": "artifacts",
           "tableTo": "production_stages",
-          "columnsFrom": [
-            "production_stage_id",
-            "production_id"
-          ],
-          "columnsTo": [
-            "id",
-            "production_id"
-          ],
+          "columnsFrom": ["production_stage_id", "production_id"],
+          "columnsTo": ["id", "production_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -392,10 +364,7 @@
       "indexes": {
         "candidate_comments_candidate_position_unique": {
           "name": "candidate_comments_candidate_position_unique",
-          "columns": [
-            "candidate_id",
-            "position"
-          ],
+          "columns": ["candidate_id", "position"],
           "isUnique": true
         }
       },
@@ -404,12 +373,8 @@
           "name": "candidate_comments_candidate_id_candidates_id_fk",
           "tableFrom": "candidate_comments",
           "tableTo": "candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -590,9 +555,7 @@
       "indexes": {
         "director_treatments_candidate_unique": {
           "name": "director_treatments_candidate_unique",
-          "columns": [
-            "candidate_id"
-          ],
+          "columns": ["candidate_id"],
           "isUnique": true
         }
       },
@@ -601,12 +564,8 @@
           "name": "director_treatments_candidate_id_candidates_id_fk",
           "tableFrom": "director_treatments",
           "tableTo": "candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -677,16 +636,12 @@
       "indexes": {
         "editorial_decisions_candidate_id_idx": {
           "name": "editorial_decisions_candidate_id_idx",
-          "columns": [
-            "candidate_id"
-          ],
+          "columns": ["candidate_id"],
           "isUnique": false
         },
         "editorial_decisions_production_id_idx": {
           "name": "editorial_decisions_production_id_idx",
-          "columns": [
-            "production_id"
-          ],
+          "columns": ["production_id"],
           "isUnique": false
         }
       },
@@ -695,12 +650,8 @@
           "name": "editorial_decisions_candidate_id_candidates_id_fk",
           "tableFrom": "editorial_decisions",
           "tableTo": "candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -708,12 +659,8 @@
           "name": "editorial_decisions_production_id_productions_id_fk",
           "tableFrom": "editorial_decisions",
           "tableTo": "productions",
-          "columnsFrom": [
-            "production_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["production_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -845,27 +792,17 @@
       "indexes": {
         "production_stages_production_name_attempt_unique": {
           "name": "production_stages_production_name_attempt_unique",
-          "columns": [
-            "production_id",
-            "name",
-            "attempt"
-          ],
+          "columns": ["production_id", "name", "attempt"],
           "isUnique": true
         },
         "production_stages_id_production_unique": {
           "name": "production_stages_id_production_unique",
-          "columns": [
-            "id",
-            "production_id"
-          ],
+          "columns": ["id", "production_id"],
           "isUnique": true
         },
         "production_stages_lease_idx": {
           "name": "production_stages_lease_idx",
-          "columns": [
-            "status",
-            "worker_lease_expires_at"
-          ],
+          "columns": ["status", "worker_lease_expires_at"],
           "isUnique": false
         }
       },
@@ -874,12 +811,8 @@
           "name": "production_stages_production_id_productions_id_fk",
           "tableFrom": "production_stages",
           "tableTo": "productions",
-          "columnsFrom": [
-            "production_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["production_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1029,9 +962,7 @@
       "indexes": {
         "productions_candidate_id_idx": {
           "name": "productions_candidate_id_idx",
-          "columns": [
-            "candidate_id"
-          ],
+          "columns": ["candidate_id"],
           "isUnique": false
         }
       },
@@ -1040,12 +971,8 @@
           "name": "productions_candidate_id_candidates_id_fk",
           "tableFrom": "productions",
           "tableTo": "candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1053,14 +980,8 @@
           "name": "productions_candidate_rights_fk",
           "tableFrom": "productions",
           "tableTo": "rights_confirmations",
-          "columnsFrom": [
-            "rights_confirmation_id",
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id",
-            "candidate_id"
-          ],
+          "columnsFrom": ["rights_confirmation_id", "candidate_id"],
+          "columnsTo": ["id", "candidate_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1129,17 +1050,12 @@
       "indexes": {
         "rights_candidate_id_unique": {
           "name": "rights_candidate_id_unique",
-          "columns": [
-            "candidate_id"
-          ],
+          "columns": ["candidate_id"],
           "isUnique": true
         },
         "rights_id_candidate_unique": {
           "name": "rights_id_candidate_unique",
-          "columns": [
-            "id",
-            "candidate_id"
-          ],
+          "columns": ["id", "candidate_id"],
           "isUnique": true
         }
       },
@@ -1148,12 +1064,8 @@
           "name": "rights_confirmations_candidate_id_candidates_id_fk",
           "tableFrom": "rights_confirmations",
           "tableTo": "candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

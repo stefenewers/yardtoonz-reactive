@@ -3,6 +3,8 @@ import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { randomUUID } from "node:crypto";
 
 import { scoreCandidate } from "@/domain/scoring";
+import { humorAnalystEvidence, trendScoutEvidence } from "@/domain/agent-trace";
+import { insertAgentRun } from "../agents/trace";
 import type { CandidateIntakeRecord } from "@/shared/candidate-intake";
 import {
   candidateSchema,
@@ -11,6 +13,7 @@ import {
   fitChecklistSchema,
   type Candidate,
   type CandidateListQuery,
+  type CandidateScores,
   type RightsConfirmation,
 } from "@/shared/candidates";
 
@@ -56,9 +59,9 @@ function parseCandidate(
 
 function serializeCandidateRecord(
   record: PersistableCandidateRecord,
+  scores: CandidateScores,
   now: string,
 ) {
-  const scores = scoreCandidate(record);
   return {
     id: record.id,
     platform: record.platform,
@@ -85,9 +88,10 @@ function insertCandidateRecords(
   now: string,
 ): number {
   for (const record of records) {
+    const scores = scoreCandidate(record);
     database
       .insert(candidates)
-      .values(serializeCandidateRecord(record, now))
+      .values(serializeCandidateRecord(record, scores, now))
       .run();
     if (record.commentExcerpts.length > 0) {
       database
@@ -101,6 +105,33 @@ function insertCandidateRecords(
         )
         .run();
     }
+
+    // Intake trace: Trend Scout and Humor Analyst score the same record in
+    // one transaction, so their rows exist exactly when the candidate does.
+    // Their explanations are the honest decisions; deterministic scoring
+    // reports no provider, model, or measured elapsed time.
+    insertAgentRun(database, {
+      agentKey: "trend-scout",
+      state: "COMPLETE",
+      inputEvidence: trendScoutEvidence({
+        platform: record.platform,
+        suppliedMetricCount: scores.viralMomentum.inputsUsed.length,
+        publishedAtSupplied: record.publishedAt !== undefined,
+      }),
+      decision: scores.viralMomentum.explanation,
+      candidateId: record.id,
+      now: new Date(now),
+    });
+    insertAgentRun(database, {
+      agentKey: "humor-analyst",
+      state: "COMPLETE",
+      inputEvidence: humorAnalystEvidence({
+        commentCount: record.commentExcerpts.length,
+      }),
+      decision: scores.humorResponse.explanation,
+      candidateId: record.id,
+      now: new Date(now),
+    });
   }
   return records.length;
 }

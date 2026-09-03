@@ -432,9 +432,7 @@ export const agentRuns = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     agentKey: text("agent_key", { enum: agentKeys }).notNull(),
-    state: text("state", { enum: agentRunStates })
-      .notNull()
-      .default("WAITING"),
+    state: text("state", { enum: agentRunStates }).notNull().default("WAITING"),
     attempt: integer("attempt").notNull().default(1),
     /** Bounded scalar record of the evidence the run actually received. */
     inputEvidenceJson: text("input_evidence_json").notNull(),

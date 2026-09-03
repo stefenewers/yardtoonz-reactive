@@ -132,6 +132,7 @@ describe("SQLite persistence", () => {
       .all() as TableNameRow[];
 
     expect(tables.map(({ name }) => name)).toEqual([
+      "agent_runs",
       "artifacts",
       "candidate_comments",
       "candidates",
