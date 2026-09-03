@@ -29,6 +29,8 @@ export const candidateSchema = z.object({
     scoringVersion: z.string().min(1),
   }),
   status: z.enum(["NEW", "APPROVED", "REJECTED"]),
+  decisionReason: z.string().optional(),
+  decidedAt: z.string().optional(),
 });
 
 export const candidateListSchema = z.array(candidateSchema);
@@ -52,6 +54,8 @@ export interface CandidateListOptions {
 export interface CandidateReviewClient {
   listCandidates(options?: CandidateListOptions): Promise<Candidate[]>;
   approveCandidate(candidateId: string): Promise<Candidate>;
+  rejectCandidate(candidateId: string, reason?: string): Promise<Candidate>;
+  restoreCandidate(candidateId: string): Promise<Candidate>;
   confirmRights(input: {
     candidateId: string;
     confirmationTextVersion: string;
@@ -62,6 +66,20 @@ export function formatMetric(value: number | undefined): string {
   return value === undefined
     ? "Not supplied"
     : new Intl.NumberFormat("en").format(value);
+}
+
+/**
+ * Persisted decision timestamps render in UTC so an editorial decision reads
+ * the same no matter where the desk is reopened.
+ */
+export function formatDecisionTimestamp(decidedAt: string): string {
+  const timestamp = new Date(decidedAt);
+  if (Number.isNaN(timestamp.getTime())) return decidedAt;
+  return `${new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(timestamp)} UTC`;
 }
 
 export function scoreLabel(score: number): "Strong" | "Promising" | "Review" {

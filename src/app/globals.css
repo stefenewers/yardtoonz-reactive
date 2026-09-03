@@ -503,6 +503,66 @@ input:focus-visible {
   text-align: center;
 }
 
+.decision-banner {
+  margin: 1.25rem 0;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: var(--surface-raised);
+}
+.decision-banner strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+.decision-banner p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.decision-banner--approved {
+  border-color: rgb(113 212 140 / 35%);
+}
+.decision-banner--approved strong {
+  color: var(--success);
+}
+.decision-banner--rejected {
+  border-color: rgb(255 116 108 / 35%);
+}
+.decision-banner--rejected strong {
+  color: var(--danger);
+}
+
+.detail-evidence--muted {
+  opacity: 0.78;
+}
+
+.reject-area {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  border: 1px solid rgb(255 116 108 / 35%);
+  border-radius: 0.85rem;
+}
+.reject-area label {
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+.reject-area textarea {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.reject-area__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
 .gate-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.75fr);

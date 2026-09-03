@@ -2,18 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  formatMetric,
-  scoreLabel,
-  type Candidate,
-  type ScoreEvidence,
-} from "@/domain/candidate";
+import { type Candidate } from "@/domain/candidate";
 import {
   defaultInboxSort,
   healthDisplay,
   humanizeProvider,
-  overallWeightingSummary,
-  platformLabels,
   providerModeLabel,
   type InboxSortState,
 } from "@/domain/inbox";
@@ -22,6 +15,7 @@ import { fetchHealthReport } from "@/lib/health-client";
 import type { PublicHealthReportPayload } from "@/shared/health";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import { ProductionStudio } from "@/app/produce/production-studio";
+import { CandidateDetail } from "@/components/candidate-detail";
 import { CandidateInbox } from "@/components/candidate-inbox";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
@@ -30,30 +24,6 @@ type RequestState = "idle" | "loading" | "error";
 interface CandidateWorkspaceProps {
   imageProvider: ImageProvider;
   animationProvider: AnimationProvider;
-}
-
-function ScoreCard({
-  label,
-  evidence,
-}: {
-  label: string;
-  evidence: ScoreEvidence;
-}) {
-  return (
-    <article className="score-card">
-      <div className="score-card__heading">
-        <span>{label}</span>
-        <strong>{evidence.score}</strong>
-      </div>
-      <p className="score-label">{scoreLabel(evidence.score)}</p>
-      <p>{evidence.explanation}</p>
-      <small>
-        {evidence.inputsUsed.length > 0
-          ? `Based on: ${evidence.inputsUsed.join(", ")}`
-          : "No supporting comment inputs supplied"}
-      </small>
-    </article>
-  );
 }
 
 function ProviderDisclosure({
@@ -146,18 +116,21 @@ export function CandidateWorkspace({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  /** One persisted decision lands in the detail view and the inbox row alike. */
+  function applyCandidate(next: Candidate) {
+    setSelected(next);
+    setCandidates((current) =>
+      current.map((candidate) => (candidate.id === next.id ? next : candidate)),
+    );
+  }
+
   async function approveCandidate() {
     if (!selected) return;
     setRequestState("loading");
     setError(undefined);
     try {
       const approved = await client.approveCandidate(selected.id);
-      setSelected(approved);
-      setCandidates((current) =>
-        current.map((candidate) =>
-          candidate.id === approved.id ? approved : candidate,
-        ),
-      );
+      applyCandidate(approved);
       setScreen("rights");
       setRequestState("idle");
     } catch (caught) {
@@ -165,6 +138,38 @@ export function CandidateWorkspace({
         caught instanceof Error
           ? caught.message
           : "Approval failed. Try again.",
+      );
+      setRequestState("error");
+    }
+  }
+
+  async function rejectCandidate(reason?: string) {
+    if (!selected) return;
+    setRequestState("loading");
+    setError(undefined);
+    try {
+      applyCandidate(await client.rejectCandidate(selected.id, reason));
+      setRequestState("idle");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Rejection failed. Try again.",
+      );
+      setRequestState("error");
+    }
+  }
+
+  async function restoreCandidate() {
+    if (!selected) return;
+    setRequestState("loading");
+    setError(undefined);
+    try {
+      applyCandidate(await client.restoreCandidate(selected.id));
+      setRequestState("idle");
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Restore failed. Try again.",
       );
       setRequestState("error");
     }
@@ -286,95 +291,16 @@ export function CandidateWorkspace({
         )}
 
         {screen === "review" && selected && (
-          <section aria-labelledby="review-title">
-            <button
-              className="back-button"
-              type="button"
-              onClick={() => setScreen("inbox")}
-            >
-              ← Candidate inbox
-            </button>
-            <div className="review-grid">
-              <div>
-                <p className="eyebrow">Candidate review</p>
-                <h1 id="review-title">{selected.caption}</h1>
-                <p className="source-line">
-                  {platformLabels[selected.platform]} · {selected.sourceLabel}
-                </p>
-                <div className="premise-card">
-                  <span>Yard Toonz angle</span>
-                  <p>
-                    {selected.adaptationNote ?? "No adaptation note supplied."}
-                  </p>
-                </div>
-                <div className="metrics">
-                  <div>
-                    <small>Views</small>
-                    <strong>{formatMetric(selected.metrics.views)}</strong>
-                  </div>
-                  <div>
-                    <small>Likes</small>
-                    <strong>{formatMetric(selected.metrics.likes)}</strong>
-                  </div>
-                  <div>
-                    <small>Comments</small>
-                    <strong>{formatMetric(selected.metrics.comments)}</strong>
-                  </div>
-                  <div>
-                    <small>Shares</small>
-                    <strong>{formatMetric(selected.metrics.shares)}</strong>
-                  </div>
-                </div>
-                <div className="comments">
-                  <h2>Audience evidence</h2>
-                  {selected.commentExcerpts.length > 0 ? (
-                    selected.commentExcerpts.map((comment) => (
-                      <blockquote key={comment}>“{comment}”</blockquote>
-                    ))
-                  ) : (
-                    <p>No comment evidence was supplied for this candidate.</p>
-                  )}
-                </div>
-              </div>
-              <aside className="review-panel">
-                <div className="overall-score">
-                  <span>Overall opportunity</span>
-                  <strong>{selected.scores.overall}</strong>
-                  <em>{scoreLabel(selected.scores.overall)}</em>
-                </div>
-                <p className="weighting-note">{overallWeightingSummary()}</p>
-                <ScoreCard
-                  label="Viral momentum"
-                  evidence={selected.scores.viralMomentum}
-                />
-                <ScoreCard
-                  label="Humor response"
-                  evidence={selected.scores.humorResponse}
-                />
-                <ScoreCard
-                  label="Yard Toonz fit"
-                  evidence={selected.scores.yardToonzFit}
-                />
-                <div className="action-stack">
-                  <button
-                    className="primary-button"
-                    type="button"
-                    onClick={approveCandidate}
-                    disabled={busy}
-                  >
-                    {busy ? "Approving…" : "Approve for production"}
-                  </button>
-                  <button className="danger-button" type="button">
-                    Reject candidate
-                  </button>
-                  <p>
-                    Approval records an editorial decision. It does not start
-                    generation.
-                  </p>
-                </div>
-              </aside>
-            </div>
-          </section>
+          <CandidateDetail
+            key={selected.id}
+            candidate={selected}
+            busy={busy}
+            onBack={() => setScreen("inbox")}
+            onApprove={approveCandidate}
+            onReject={rejectCandidate}
+            onRestore={restoreCandidate}
+            onContinue={() => setScreen("rights")}
+          />
         )}
 
         {screen === "rights" && selected && (
