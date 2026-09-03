@@ -44,6 +44,55 @@ describe("production record contracts", () => {
     ).toMatchObject({ providerRequestId: "runway-request-1" });
   });
 
+  it("defaults lineage and metadata for minimal artifact records", () => {
+    expect(
+      createArtifactRecord({ id: "a-1", jobId: "job-1", provider: "MOCK" }),
+    ).toMatchObject({ parentArtifactIds: [], metadata: {} });
+  });
+
+  it("retains storage integrity, kind, and lineage fields", () => {
+    const record = createArtifactRecord({
+      id: "job-1-source",
+      jobId: "job-1",
+      kind: "SOURCE_VIDEO",
+      storageKey: "job-1/source.mp4",
+      mimeType: "video/mp4",
+      byteSize: 1024,
+      sha256: "a".repeat(64),
+      parentArtifactIds: [],
+      provider: "USER_UPLOAD",
+      metadata: { durationSeconds: 6.3 },
+      createdAt: "2026-09-03T00:00:00.000Z",
+    });
+
+    expect(record).toMatchObject({
+      kind: "SOURCE_VIDEO",
+      storageKey: "job-1/source.mp4",
+      byteSize: 1024,
+      sha256: "a".repeat(64),
+      metadata: { durationSeconds: 6.3 },
+    });
+  });
+
+  it("rejects malformed integrity data", () => {
+    expect(() =>
+      createArtifactRecord({
+        id: "a-1",
+        jobId: "job-1",
+        provider: "USER_UPLOAD",
+        sha256: "not-a-hash",
+      }),
+    ).toThrow();
+    expect(() =>
+      createArtifactRecord({
+        id: "a-1",
+        jobId: "job-1",
+        provider: "USER_UPLOAD",
+        byteSize: -1,
+      }),
+    ).toThrow();
+  });
+
   it("rejects an unrecognized producing provider", () => {
     expect(() =>
       createArtifactRecord({

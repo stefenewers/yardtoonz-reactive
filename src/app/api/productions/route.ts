@@ -7,6 +7,9 @@ export const runtime = "nodejs";
 const errorMessages: Record<MediaPipelineError["code"], string> = {
   INVALID_REQUEST:
     "Choose an MP4 within the upload limit and confirm source rights.",
+  UNSUPPORTED_MEDIA_TYPE: "Upload the source as an MP4 video.",
+  UPLOAD_TOO_LARGE: "That MP4 is larger than the configured upload limit.",
+  INVALID_MEDIA_CONTENT: "That file does not contain playable MP4 media.",
   SOURCE_TOO_SHORT: "The source must contain the selected 5–8 second segment.",
   SOURCE_AUDIO_REQUIRED: "The source MP4 must include an audio track.",
   MOCK_PROVIDERS_REQUIRED:

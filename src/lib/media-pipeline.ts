@@ -1,11 +1,19 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import { z } from "zod";
 
+import type { ArtifactKind } from "../domain/production";
+import {
+  createLocalArtifactStore,
+  generateArtifactStorageKey,
+  getLocalArtifactRoot,
+  type ArtifactStore,
+  type StoredArtifact,
+} from "./artifact-store";
 import { env } from "./env";
 import { mediaToolPaths } from "./media-tools";
 import {
@@ -13,6 +21,7 @@ import {
   createProductionJobRecord,
   type ArtifactRecord,
 } from "./production-records";
+import { assertMp4Upload, MediaUploadError } from "./upload-validation";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,8 +37,55 @@ const artifactNames = [
 
 export type MediaArtifactName = (typeof artifactNames)[number];
 
+interface ArtifactSpec {
+  kind: ArtifactKind;
+  mimeType: string;
+  parents: readonly MediaArtifactName[];
+}
+
+/**
+ * Kind, stored media type, and parent lineage for every artifact the mock
+ * pipeline records. Lineage follows the FFmpeg data flow: clip from source,
+ * audio and keyframe from the clip, styled frame from the keyframe,
+ * animation from the styled frame, and the final mux from animation + audio.
+ */
+const artifactSpecs: Record<MediaArtifactName, ArtifactSpec> = {
+  source: { kind: "SOURCE_VIDEO", mimeType: "video/mp4", parents: [] },
+  clip: { kind: "EXTRACTED_CLIP", mimeType: "video/mp4", parents: ["source"] },
+  audio: { kind: "EXTRACTED_AUDIO", mimeType: "audio/mp4", parents: ["clip"] },
+  keyframe: { kind: "KEYFRAME", mimeType: "image/png", parents: ["clip"] },
+  "styled-frame": {
+    kind: "STYLED_FRAME",
+    mimeType: "image/png",
+    parents: ["keyframe"],
+  },
+  animation: {
+    kind: "SILENT_ANIMATION",
+    mimeType: "video/mp4",
+    parents: ["styled-frame"],
+  },
+  final: {
+    kind: "FINAL_VIDEO",
+    mimeType: "video/mp4",
+    parents: ["animation", "audio"],
+  },
+};
+
+const artifactProvidersByName: Record<
+  MediaArtifactName,
+  ArtifactRecord["provider"]
+> = {
+  source: "USER_UPLOAD",
+  clip: "FFMPEG",
+  audio: "FFMPEG",
+  keyframe: "FFMPEG",
+  "styled-frame": "MOCK",
+  animation: "MOCK",
+  final: "FFMPEG",
+};
+
 const mediaPipelineRequestSchema = z.object({
-  contentType: z.literal("video/mp4"),
+  contentType: z.string(),
   rightsConfirmed: z.literal(true),
   segmentStart: z.number().finite().nonnegative().default(0),
   segmentDuration: z.number().finite().min(5).max(8).default(6),
@@ -46,6 +102,8 @@ const probeSchema = z.object({
     }),
   ),
 });
+
+type MediaProbe = z.infer<typeof probeSchema>;
 
 export interface MediaPipelineRequest {
   bytes: Uint8Array;
@@ -76,6 +134,9 @@ export class MediaPipelineError extends Error {
   constructor(
     public readonly code:
       | "INVALID_REQUEST"
+      | "UNSUPPORTED_MEDIA_TYPE"
+      | "UPLOAD_TOO_LARGE"
+      | "INVALID_MEDIA_CONTENT"
       | "SOURCE_TOO_SHORT"
       | "SOURCE_AUDIO_REQUIRED"
       | "MOCK_PROVIDERS_REQUIRED"
@@ -83,17 +144,6 @@ export class MediaPipelineError extends Error {
   ) {
     super(code);
   }
-}
-
-function getArtifactRoot(): string {
-  return path.resolve(
-    /* turbopackIgnore: true */ process.cwd(),
-    env.ARTIFACT_ROOT,
-  );
-}
-
-function getJobDirectory(jobId: string): string {
-  return path.join(/* turbopackIgnore: true */ getArtifactRoot(), jobId);
 }
 
 function getArtifactFileName(name: MediaArtifactName): string {
@@ -109,11 +159,12 @@ function getArtifactFileName(name: MediaArtifactName): string {
   return names[name];
 }
 
-function getArtifactPath(jobId: string, name: MediaArtifactName): string {
-  return path.join(
-    /* turbopackIgnore: true */ getJobDirectory(jobId),
-    getArtifactFileName(name),
-  );
+function getStorageKey(jobId: string, name: MediaArtifactName): string {
+  return generateArtifactStorageKey(jobId, getArtifactFileName(name));
+}
+
+function getJobDirectory(jobId: string): string {
+  return path.join(/* turbopackIgnore: true */ getLocalArtifactRoot(), jobId);
 }
 
 function getArtifactUrl(jobId: string, name: MediaArtifactName): string {
@@ -146,22 +197,57 @@ function assertMockProviders(): void {
   }
 }
 
-function createArtifactRecords(jobId: string): ArtifactRecord[] {
-  const providers = {
-    source: "USER_UPLOAD",
-    clip: "FFMPEG",
-    audio: "FFMPEG",
-    keyframe: "FFMPEG",
-    "styled-frame": "MOCK",
-    animation: "MOCK",
-    final: "FFMPEG",
-  } as const;
+function probeMetadata(
+  probe: MediaProbe,
+): Record<string, string | number | boolean | null> {
+  const video = probe.streams.find((stream) => stream.codec_type === "video");
+  const audio = probe.streams.find((stream) => stream.codec_type === "audio");
+  return {
+    durationSeconds: probe.format.duration,
+    width: video?.width ?? null,
+    height: video?.height ?? null,
+    videoCodec: video?.codec_name ?? null,
+    audioCodec: audio?.codec_name ?? null,
+    audioPresent: probe.streams.some((stream) => stream.codec_type === "audio"),
+  };
+}
 
-  return artifactNames.map((name) =>
-    createArtifactRecord({
-      id: `${jobId}-${name}`,
-      jobId,
-      provider: providers[name],
+async function buildArtifactRecords(input: {
+  jobId: string;
+  store: ArtifactStore;
+  sourceIntegrity: StoredArtifact;
+  sourceProbe: MediaProbe;
+  finalProbe: MediaProbe;
+}): Promise<ArtifactRecord[]> {
+  const { jobId, store, sourceIntegrity, sourceProbe, finalProbe } = input;
+  const createdAt = new Date().toISOString();
+
+  return Promise.all(
+    artifactNames.map(async (name) => {
+      const spec = artifactSpecs[name];
+      const storageKey = getStorageKey(jobId, name);
+      const integrity =
+        name === "source" ? sourceIntegrity : await store.inspect(storageKey);
+      const metadata =
+        name === "source"
+          ? probeMetadata(sourceProbe)
+          : name === "final"
+            ? probeMetadata(finalProbe)
+            : {};
+
+      return createArtifactRecord({
+        id: `${jobId}-${name}`,
+        jobId,
+        kind: spec.kind,
+        storageKey,
+        mimeType: spec.mimeType,
+        byteSize: integrity.byteSize,
+        sha256: integrity.sha256,
+        parentArtifactIds: spec.parents.map((parent) => `${jobId}-${parent}`),
+        provider: artifactProvidersByName[name],
+        metadata,
+        createdAt,
+      });
     }),
   );
 }
@@ -174,16 +260,20 @@ function createArtifactUrls(jobId: string): Record<MediaArtifactName, string> {
 
 async function runPipeline(
   jobId: string,
+  store: ArtifactStore,
   segmentStart: number,
   segmentDuration: number,
 ): Promise<void> {
-  const source = getArtifactPath(jobId, "source");
-  const clip = getArtifactPath(jobId, "clip");
-  const audio = getArtifactPath(jobId, "audio");
-  const keyframe = getArtifactPath(jobId, "keyframe");
-  const styledFrame = getArtifactPath(jobId, "styled-frame");
-  const animation = getArtifactPath(jobId, "animation");
-  const final = getArtifactPath(jobId, "final");
+  const [source, clip, audio, keyframe, styledFrame, animation, final] =
+    await Promise.all([
+      store.resolve(getStorageKey(jobId, "source")),
+      store.resolve(getStorageKey(jobId, "clip")),
+      store.resolve(getStorageKey(jobId, "audio")),
+      store.resolve(getStorageKey(jobId, "keyframe")),
+      store.resolve(getStorageKey(jobId, "styled-frame")),
+      store.resolve(getStorageKey(jobId, "animation")),
+      store.resolve(getStorageKey(jobId, "final")),
+    ]);
   const start = segmentStart.toFixed(3);
   const duration = segmentDuration.toFixed(3);
 
@@ -284,19 +374,29 @@ export async function createMockCartoon(
   assertMockProviders();
 
   const parsed = mediaPipelineRequestSchema.safeParse(input);
-  if (
-    !parsed.success ||
-    input.bytes.byteLength > env.MAX_UPLOAD_MB * 1024 * 1024
-  ) {
+  if (!parsed.success) {
     throw new MediaPipelineError("INVALID_REQUEST");
   }
 
   const jobId = randomUUID();
-  await mkdir(getJobDirectory(jobId), { recursive: true });
-  await writeFile(getArtifactPath(jobId, "source"), input.bytes);
+  const store = createLocalArtifactStore();
 
   try {
-    const sourceProbe = await probeMedia(getArtifactPath(jobId, "source"));
+    assertMp4Upload(
+      input.bytes,
+      input.contentType,
+      env.MAX_UPLOAD_MB * 1024 * 1024,
+    );
+
+    const sourceKey = getStorageKey(jobId, "source");
+    const storedSource = await store.save({
+      bytes: input.bytes,
+      storageKey: sourceKey,
+      mimeType: artifactSpecs.source.mimeType,
+    });
+    const sourcePath = await store.resolve(sourceKey);
+
+    const sourceProbe = await probeMedia(sourcePath);
     const hasAudio = sourceProbe.streams.some(
       (stream) => stream.codec_type === "audio",
     );
@@ -310,11 +410,13 @@ export async function createMockCartoon(
 
     await runPipeline(
       jobId,
+      store,
       parsed.data.segmentStart,
       parsed.data.segmentDuration,
     );
 
-    const finalProbe = await probeMedia(getArtifactPath(jobId, "final"));
+    const finalKey = getStorageKey(jobId, "final");
+    const finalProbe = await probeMedia(await store.resolve(finalKey));
     const video = finalProbe.streams.find(
       (stream) => stream.codec_type === "video",
     );
@@ -324,6 +426,14 @@ export async function createMockCartoon(
     if (!video?.width || !video.height || !finalHasAudio) {
       throw new MediaPipelineError("PROCESSING_FAILED");
     }
+
+    const artifactRecords = await buildArtifactRecords({
+      jobId,
+      store,
+      sourceIntegrity: storedSource,
+      sourceProbe,
+      finalProbe,
+    });
 
     const job = createProductionJobRecord({
       id: jobId,
@@ -341,7 +451,7 @@ export async function createMockCartoon(
       videoCodec: video.codec_name ?? "h264",
       audioPresent: true,
       artifacts: createArtifactUrls(jobId),
-      artifactRecords: createArtifactRecords(jobId),
+      artifactRecords,
     };
     await writeFile(
       path.join(getJobDirectory(jobId), "job.json"),
@@ -350,6 +460,9 @@ export async function createMockCartoon(
     return stored;
   } catch (error: unknown) {
     if (error instanceof MediaPipelineError) throw error;
+    if (error instanceof MediaUploadError) {
+      throw new MediaPipelineError(error.code);
+    }
     throw new MediaPipelineError("PROCESSING_FAILED");
   }
 }
@@ -377,15 +490,10 @@ export function resolveArtifactPath(
   if (!parsedJobId.success || !parsedName.success) {
     throw new MediaPipelineError("INVALID_REQUEST");
   }
-  const filePath = getArtifactPath(parsedJobId.data, parsedName.data);
+  const name = parsedName.data;
   return {
-    path: filePath,
-    downloadName: getArtifactFileName(parsedName.data),
-    contentType:
-      parsedName.data.includes("frame") || parsedName.data === "keyframe"
-        ? "image/png"
-        : parsedName.data === "audio"
-          ? "audio/mp4"
-          : "video/mp4",
+    path: path.join(getLocalArtifactRoot(), getStorageKey(jobId, name)),
+    downloadName: getArtifactFileName(name),
+    contentType: artifactSpecs[name].mimeType,
   };
 }
