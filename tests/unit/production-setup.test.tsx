@@ -396,6 +396,15 @@ describe("ProductionSetup", () => {
           makeDetail({ queued: true, withSource: true }),
         );
       }
+      if (
+        url === "/api/productions/prod-e51" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse(
+          200,
+          makeDetail({ queued: true, withSource: true }),
+        );
+      }
       throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
     });
 
@@ -418,7 +427,8 @@ describe("ProductionSetup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start production" }));
 
-    await screen.findByRole("heading", { name: "Production queued" });
+    // Queueing hands control to the authoritative job monitor.
+    await screen.findByRole("heading", { name: "Job monitor" });
 
     const setupPatches = fetchMock.mock.calls.filter(
       ([input, init]) =>
@@ -436,6 +446,7 @@ describe("ProductionSetup", () => {
     // Queued state still discloses providers separately.
     expect(screen.getByText("Image provider")).toBeTruthy();
     expect(screen.getByText("Animation provider")).toBeTruthy();
+    expect(screen.getByLabelText("Production stage timeline")).toBeTruthy();
   });
 
   it("surfaces the API's start-gate message when start is refused", async () => {

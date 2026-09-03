@@ -1,16 +1,19 @@
 import type { SegmentSelection } from "../domain/production";
 import type { AnimationProvider, ImageProvider } from "./providers";
 import {
+  listProductionsResponseSchema,
   productionDetailResponseSchema,
   productionErrorResponseSchema,
   type ProductionDetailResponse,
+  type RecordOutputDecisionRequest,
 } from "../shared/productions";
 import type { ZodType } from "zod";
 
 /**
  * Browser client for the persisted production APIs. Failures surface as
- * ProductionApiError carrying the stable API error code so the setup UI can
- * explain exactly why a gate is closed (Technical Specification §10).
+ * ProductionApiError carrying the stable API error code so the setup and
+ * job/output UI can explain exactly why an action is blocked
+ * (Technical Specification §10).
  */
 
 export class ProductionApiError extends Error {
@@ -66,7 +69,7 @@ async function parsePayload<T>(
   return parsed.data;
 }
 
-export interface ProductionSetupClient {
+export interface ProductionApiClient {
   createProduction(input: {
     candidateId: string;
     segment: SegmentSelection;
@@ -89,22 +92,46 @@ export interface ProductionSetupClient {
     source: File,
   ): Promise<ProductionDetailResponse>;
   start(productionId: string): Promise<ProductionDetailResponse>;
+  /** Authoritative job snapshot: production, stages, artifacts, decision. */
+  getDetail(productionId: string): Promise<ProductionDetailResponse>;
+  /** Re-arms a FAILED production; the response is the re-armed detail. */
+  retry(productionId: string): Promise<ProductionDetailResponse>;
+  /** Persists the output decision; the response carries the fresh verdict. */
+  recordDecision(
+    productionId: string,
+    body: RecordOutputDecisionRequest,
+  ): Promise<ProductionDetailResponse>;
+  /** Lists a candidate's productions for revisit recovery. */
+  listForCandidate(candidateId: string): Promise<ProductionDetailResponse[]>;
+  /** Safe URL for previewing or downloading one stored artifact. */
+  artifactUrl(
+    productionId: string,
+    artifactId: string,
+    download?: boolean,
+  ): string;
 }
 
 export function createApiProductionClient(
   productionFetch: ProductionFetch = fetch,
-): ProductionSetupClient {
-  async function send(
-    url: string,
-    init: RequestInit,
-  ): Promise<ProductionDetailResponse> {
+): ProductionApiClient {
+  async function request(url: string, init: RequestInit): Promise<Response> {
     let response: Response;
     try {
       response = await productionFetch(url, init);
     } catch (cause) {
       throw unavailableError(cause);
     }
-    return parsePayload(response, productionDetailResponseSchema);
+    return response;
+  }
+
+  async function send(
+    url: string,
+    init: RequestInit,
+  ): Promise<ProductionDetailResponse> {
+    return parsePayload(
+      await request(url, init),
+      productionDetailResponseSchema,
+    );
   }
 
   return {
@@ -134,6 +161,36 @@ export function createApiProductionClient(
       return send(`/api/productions/${productionId}/start`, {
         method: "POST",
       });
+    },
+    async getDetail(productionId) {
+      return send(`/api/productions/${productionId}`, { method: "GET" });
+    },
+    async retry(productionId) {
+      return send(`/api/productions/${productionId}/retry`, {
+        method: "POST",
+      });
+    },
+    async recordDecision(productionId, body) {
+      return send(`/api/productions/${productionId}/decision`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    },
+    async listForCandidate(candidateId) {
+      const response = await request(
+        `/api/productions?candidateId=${encodeURIComponent(candidateId)}`,
+        { method: "GET" },
+      );
+      const payload = await parsePayload(
+        response,
+        listProductionsResponseSchema,
+      );
+      return payload.productions;
+    },
+    artifactUrl(productionId, artifactId, download = false) {
+      const suffix = download ? "?download=1" : "";
+      return `/api/productions/${productionId}/artifacts/${artifactId}${suffix}`;
     },
   };
 }

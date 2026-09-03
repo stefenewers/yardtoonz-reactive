@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import { ProductionGateError } from "./errors";
 import {
   artifacts,
   candidates,
+  editorialDecisions,
   productions,
   productionStages,
   rightsConfirmations,
@@ -134,6 +135,7 @@ export function createProductionRepository(database: Database) {
       .where(eq(artifacts.productionId, id))
       .orderBy(asc(artifacts.createdAt))
       .all();
+    const outputDecisionRow = getLatestOutputDecisionRow(id);
 
     return productionDetailResponseSchema.parse({
       production: {
@@ -176,7 +178,33 @@ export function createProductionRepository(database: Database) {
         >,
         createdAt: artifact.createdAt.toISOString(),
       })),
+      outputDecision: outputDecisionRow
+        ? {
+            decision: outputDecisionRow.decision,
+            reason: outputDecisionRow.reason ?? undefined,
+            decidedAt: outputDecisionRow.decidedAt,
+          }
+        : undefined,
     });
+  }
+
+  /** The newest OUTPUT decision for a production, if any. */
+  function getLatestOutputDecisionRow(productionId: string) {
+    return database
+      .select({
+        decision: editorialDecisions.decision,
+        reason: editorialDecisions.reason,
+        decidedAt: editorialDecisions.decidedAt,
+      })
+      .from(editorialDecisions)
+      .where(
+        and(
+          eq(editorialDecisions.productionId, productionId),
+          eq(editorialDecisions.subject, "OUTPUT"),
+        ),
+      )
+      .orderBy(desc(editorialDecisions.decidedAt))
+      .get();
   }
 
   function buildDomainJob(
@@ -200,6 +228,92 @@ export function createProductionRepository(database: Database) {
 
   return {
     getDetail,
+
+    /** Resolves one artifact row for safe byte serving; undefined when absent. */
+    getArtifact(
+      productionId: string,
+      artifactId: string,
+    ):
+      | {
+          kind: (typeof artifacts.$inferSelect)["kind"];
+          mimeType: string;
+          storageKey: string;
+          byteSize: number;
+        }
+      | undefined {
+      return database
+        .select({
+          kind: artifacts.kind,
+          mimeType: artifacts.mimeType,
+          storageKey: artifacts.storageKey,
+          byteSize: artifacts.byteSize,
+        })
+        .from(artifacts)
+        .where(
+          and(
+            eq(artifacts.productionId, productionId),
+            eq(artifacts.id, artifactId),
+          ),
+        )
+        .get();
+    },
+
+    /**
+     * Persists an OUTPUT editorial decision on a COMPLETE production.
+     * Repeating the current decision is an idempotent no-op that never
+     * inserts a second row; switching decisions appends a fresh timestamped
+     * row so the review history stays auditable.
+     */
+    recordOutputDecision(
+      id: string,
+      input: { decision: "APPROVED" | "REJECTED"; reason?: string },
+      now: Date,
+    ): ProductionDetailResponse {
+      return database.transaction((transaction) => {
+        const row = transaction
+          .select()
+          .from(productions)
+          .where(eq(productions.id, id))
+          .get();
+        if (!row) throw new ProductionGateError("PRODUCTION_NOT_FOUND");
+        if (row.status !== "COMPLETE") {
+          throw new ProductionTransitionError("ILLEGAL_TRANSITION");
+        }
+
+        const latest = getLatestOutputDecisionRow(id);
+        if (latest?.decision !== input.decision) {
+          transaction
+            .insert(editorialDecisions)
+            .values({
+              id: `decision_${randomUUID()}`,
+              candidateId: row.candidateId,
+              productionId: id,
+              subject: "OUTPUT",
+              decision: input.decision,
+              reason:
+                input.decision === "REJECTED" ? (input.reason ?? null) : null,
+              decidedAt: now.toISOString(),
+            })
+            .run();
+        }
+
+        return getDetail(id)!;
+      });
+    },
+
+    /** All productions for one candidate, newest first (revisit recovery). */
+    listForCandidate(candidateId: string): ProductionDetailResponse[] {
+      const rows = database
+        .select({ id: productions.id })
+        .from(productions)
+        .where(eq(productions.candidateId, candidateId))
+        .orderBy(desc(productions.createdAt))
+        .all();
+      return rows.flatMap(({ id }) => {
+        const detail = getDetail(id);
+        return detail ? [detail] : [];
+      });
+    },
 
     createDraft(input: {
       candidateId: string;

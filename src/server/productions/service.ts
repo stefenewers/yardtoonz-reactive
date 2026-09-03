@@ -31,8 +31,7 @@ export function getProductionArtifactStore(): ArtifactStore {
 }
 
 let workerRepository:
-  | ReturnType<typeof createProductionWorkerRepository>
-  | undefined;
+  ReturnType<typeof createProductionWorkerRepository> | undefined;
 
 /**
  * Worker-pipeline persistence (stage leases, attempts, retry verification).

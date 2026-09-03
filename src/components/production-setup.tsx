@@ -13,7 +13,11 @@ import {
   sourceProblemMessages,
   type SourceVideoFacts,
 } from "@/domain/production-setup";
-import { createApiProductionClient } from "@/lib/production-client";
+import { JobOutput } from "@/components/job-output";
+import {
+  createApiProductionClient,
+  ProductionApiError,
+} from "@/lib/production-client";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import type { ProductionDetailResponse } from "@/shared/productions";
 
@@ -107,6 +111,28 @@ export function ProductionSetup({
           );
         }
       } catch (createError) {
+        // A revisit of an already-started candidate is rejected as already
+        // active; recover the existing production so the authoritative job
+        // view renders instead of dead-ending (UX specification: "Page
+        // revisited").
+        if (
+          createError instanceof ProductionApiError &&
+          createError.code === "PRODUCTION_ALREADY_ACTIVE"
+        ) {
+          try {
+            const existing = await client.listForCandidate(candidateId);
+            const recovered = existing[0];
+            if (recovered) {
+              setProduction(recovered);
+              return;
+            }
+          } catch (listError) {
+            if (!(listError instanceof ProductionApiError)) throw listError;
+            setCreationError(listError.message);
+            initializeRef.current = false;
+            return;
+          }
+        }
         initializeRef.current = false;
         setCreationError(
           createError instanceof Error
@@ -243,39 +269,20 @@ export function ProductionSetup({
   const shownAnimationProvider =
     production?.production.animationProvider ?? animationProvider;
 
-  if (production?.production.status === "QUEUED") {
-    const queuedSegment = production.production.segment;
+  // Past the queue gate the setup form is read-only server-side, so the
+  // authoritative job monitor takes over for queued, running, failed, and
+  // complete productions alike.
+  if (
+    production &&
+    production.production.status !== "DRAFT" &&
+    production.production.status !== "RIGHTS_CONFIRMED"
+  ) {
     return (
-      <section className="studio-card" aria-labelledby="queued-title">
-        <p className="eyebrow">Production setup</p>
-        <h1 id="queued-title">Production queued</h1>
-        <div className="success-banner" role="status">
-          <span>✓</span>
-          <div>
-            <strong>All gates passed</strong>
-            <p>
-              Production {production.production.id} is queued with segment{" "}
-              {formatSeconds(queuedSegment.startSeconds)}–
-              {formatSeconds(queuedSegment.endSeconds)}. The local worker picks
-              it up and runs every stage on this machine.
-            </p>
-          </div>
-        </div>
-        <dl className="provider-strip" aria-label="Production providers">
-          <div>
-            <dt>Image provider</dt>
-            <dd>{humanizeProvider(production.production.imageProvider)}</dd>
-          </div>
-          <div>
-            <dt>Animation provider</dt>
-            <dd>{humanizeProvider(production.production.animationProvider)}</dd>
-          </div>
-        </dl>
-        <p className="summary">
-          Stage-by-stage monitoring opens with the job detail work. Nothing is
-          published automatically — the output waits for editorial review.
-        </p>
-      </section>
+      <JobOutput
+        productionId={production.production.id}
+        onBack={onBack}
+        backLabel="← Production setup"
+      />
     );
   }
 
