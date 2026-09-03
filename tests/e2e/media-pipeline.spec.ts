@@ -45,15 +45,27 @@ test.afterAll(async () => {
 test("authorized MP4 becomes a previewable and downloadable mock cartoon", async ({
   page,
 }) => {
-  await page.goto("/produce");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Load demo candidates" }).click();
+  await page
+    .getByRole("button", {
+      name: /One phone call turns a quiet reasoning into pure yard chaos/,
+    })
+    .click();
+  await page.getByRole("button", { name: "Approve for production" }).click();
+  await page
+    .getByRole("checkbox", { name: /I confirm Yard Toonz is authorized/ })
+    .check();
+  await page
+    .getByRole("button", { name: "Confirm rights and continue" })
+    .click();
+  await expect(page.getByText("Rights confirmed")).toBeVisible();
 
   const createButton = page.getByRole("button", { name: "Create cartoon" });
   await expect(createButton).toBeDisabled();
+  await expect(page.getByRole("checkbox")).toBeChecked();
   await page.getByLabel("Source MP4").setInputFiles(fixturePath);
   await expect(page.getByText("authorized-source.mp4")).toBeVisible();
-  await expect(createButton).toBeDisabled();
-
-  await page.getByRole("checkbox").check();
   await expect(createButton).toBeEnabled();
   await createButton.click();
 

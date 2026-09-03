@@ -38,6 +38,10 @@ const completedStages = [
   "Final validation complete",
 ];
 
+interface ProductionStudioProps {
+  initialRightsConfirmed?: boolean;
+  candidateCaption?: string;
+}
 type ProductionResult = z.infer<typeof productionResultSchema>;
 
 async function submitProduction(
@@ -59,9 +63,14 @@ async function submitProduction(
   return productionResultSchema.parse(payload);
 }
 
-export function ProductionStudio() {
+export function ProductionStudio({
+  initialRightsConfirmed = false,
+  candidateCaption,
+}: ProductionStudioProps = {}) {
   const [fileName, setFileName] = useState<string>();
-  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [rightsConfirmed, setRightsConfirmed] = useState(
+    initialRightsConfirmed,
+  );
   const [status, setStatus] = useState<
     "idle" | "processing" | "complete" | "error"
   >("idle");
@@ -157,8 +166,21 @@ export function ProductionStudio() {
 
   return (
     <section className="studio-card" aria-labelledby="studio-title">
-      <p className="eyebrow">Production studio</p>
-      <h1 id="studio-title">Turn one clip into a cartoon</h1>
+      <p className="eyebrow">Production setup · 2 of 2</p>
+      <h1 id="studio-title">Upload the source clip</h1>
+      {initialRightsConfirmed && (
+        <div className="success-banner" role="status">
+          <span>✓</span>
+          <div>
+            <strong>Rights confirmed</strong>
+            <p>
+              {candidateCaption
+                ? `Authorized production for: ${candidateCaption}`
+                : "The source and selected audio are authorized for this production."}
+            </p>
+          </div>
+        </div>
+      )}
       <p className="summary">
         Upload an authorized MP4 with audio. The local mock pipeline extracts
         six seconds, creates a clay-inspired frame, animates it, and restores
@@ -174,7 +196,7 @@ export function ProductionStudio() {
             required
             onChange={(event) => setFileName(event.target.files?.[0]?.name)}
           />
-          <strong>{fileName ?? "Choose a video"}</strong>
+          <strong>{fileName ?? "Choose an authorized MP4"}</strong>
         </label>
         <input type="hidden" name="segmentStart" value="0" />
         <input type="hidden" name="segmentDuration" value="6" />
