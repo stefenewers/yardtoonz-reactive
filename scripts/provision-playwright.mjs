@@ -10,8 +10,15 @@ import {
 const execFileAsync = promisify(execFile);
 const selection = selectPlaywrightBrowser(process.platform);
 
+// Video recording (used by the walkthrough evidence) requires Playwright's
+// ffmpeg build on every platform; the browser selection stays separate.
+const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+await execFileAsync(npxCommand, ["playwright", "install", "ffmpeg"], {
+  env: process.env,
+  timeout: 120_000,
+});
+
 if (selection === playwrightBrowserSelections.standard) {
-  const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
   await execFileAsync(npxCommand, ["playwright", "install", "chromium"], {
     env: process.env,
     timeout: 120_000,
