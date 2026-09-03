@@ -23,7 +23,8 @@ import {
 } from "../../fixtures/comment-corpora";
 import { candidateFixtures } from "../../fixtures/candidates";
 
-const markerIds = (text: string) => detectMarkers(text).map((marker) => marker.id);
+const markerIds = (text: string) =>
+  detectMarkers(text).map((marker) => marker.id);
 
 describe("laughter marker detection", () => {
   it("detects direct laughter expressions", () => {
@@ -97,7 +98,11 @@ describe("laughter marker detection", () => {
 
   it("keeps first occurrence per marker id in position order", () => {
     const markers = detectMarkers("Dead 😂 and mi dead again");
-    expect(markers.map((marker) => marker.id)).toEqual(["dead", "😂", "mi-dead"]);
+    expect(markers.map((marker) => marker.id)).toEqual([
+      "dead",
+      "😂",
+      "mi-dead",
+    ]);
   });
 
   it("classifies every marker into a known category", () => {
@@ -250,7 +255,8 @@ describe("corpus analysis", () => {
       "Big up to the driver",
     ]);
 
-    const { laughterCommentCount, laughterCoverage, sentimentCounts } = analysis.summary;
+    const { laughterCommentCount, laughterCoverage, sentimentCounts } =
+      analysis.summary;
     const laughter = analysis.comments
       .filter((comment) => comment.isLaughter)
       .filter((comment) => comment.sentiment === "POSITIVE").length;
@@ -377,9 +383,9 @@ describe("demo comment corpora", () => {
         (candidate) => candidate.id === corpus.candidateId,
       );
       expect(candidate).toBeDefined();
-      expect(corpus.comments.slice(0, candidate?.commentExcerpts.length)).toEqual(
-        candidate?.commentExcerpts,
-      );
+      expect(
+        corpus.comments.slice(0, candidate?.commentExcerpts.length),
+      ).toEqual(candidate?.commentExcerpts);
     }
   });
 
@@ -407,7 +413,11 @@ describe("demo comment corpora", () => {
 
 describe("persistence contracts", () => {
   it("round-trips a corpus analysis through the resource schema", () => {
-    const analysis = analyzeCommentCorpus(["Mi dead 😂", "lol", "boring but accurate"]);
+    const analysis = analyzeCommentCorpus([
+      "Mi dead 😂",
+      "lol",
+      "boring but accurate",
+    ]);
     const resource = {
       id: "analysis_cand_bus-stop-001",
       candidateId: "cand_bus-stop-001",
@@ -424,7 +434,9 @@ describe("persistence contracts", () => {
   it("requires candidateId on create requests", () => {
     expect(() => createHumorAnalysisRequestSchema.parse({})).toThrow();
     expect(() =>
-      createHumorAnalysisRequestSchema.parse({ candidateId: "cand_bus-stop-001" }),
+      createHumorAnalysisRequestSchema.parse({
+        candidateId: "cand_bus-stop-001",
+      }),
     ).not.toThrow();
   });
 

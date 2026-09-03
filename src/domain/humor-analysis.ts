@@ -60,8 +60,18 @@ export interface LaughterMarkerDefinition {
  */
 const laughterMarkerLexicon: readonly LaughterMarkerDefinition[] = [
   // --- Patois idioms (longest first: each consumes its own span) ---
-  { id: "mi-dead", label: "Mi dead", category: "patois", pattern: /\bmi dead\b/iu },
-  { id: "mi-weak", label: "Mi weak", category: "patois", pattern: /\bmi weak\b/iu },
+  {
+    id: "mi-dead",
+    label: "Mi dead",
+    category: "patois",
+    pattern: /\bmi dead\b/iu,
+  },
+  {
+    id: "mi-weak",
+    label: "Mi weak",
+    category: "patois",
+    pattern: /\bmi weak\b/iu,
+  },
   {
     id: "yuh-kill-me",
     label: "Yuh kill me",
@@ -100,15 +110,30 @@ const laughterMarkerLexicon: readonly LaughterMarkerDefinition[] = [
     category: "emoji",
     pattern: /\u{1F923}/gu,
   },
-  { id: "\u{1F480}", label: "\u{1F480}", category: "emoji", pattern: /\u{1F480}/gu },
+  {
+    id: "\u{1F480}",
+    label: "\u{1F480}",
+    category: "emoji",
+    pattern: /\u{1F480}/gu,
+  },
 
   // --- Direct laughter ---
   { id: "lmao", label: "LMAO", category: "direct", pattern: /\blmaoo*\b/iu },
   { id: "lol", label: "LOL", category: "direct", pattern: /\blo+l\b/iu },
   { id: "rofl", label: "ROFL", category: "direct", pattern: /\brofl\b/iu },
-  { id: "hahaha", label: "Hahaha", category: "direct", pattern: /\bha(ha)+\b/iu },
+  {
+    id: "hahaha",
+    label: "Hahaha",
+    category: "direct",
+    pattern: /\bha(ha)+\b/iu,
+  },
   { id: "hehe", label: "Hehe", category: "direct", pattern: /\bhe(he)+\b/iu },
-  { id: "im-dead", label: "I'm dead", category: "direct", pattern: /\bi[’']m dead\b/iu },
+  {
+    id: "im-dead",
+    label: "I'm dead",
+    category: "direct",
+    pattern: /\bi[’']m dead\b/iu,
+  },
   { id: "dying", label: "Dying", category: "direct", pattern: /\bdying\b/iu },
   {
     id: "crying",
@@ -184,11 +209,18 @@ export function detectMarkers(text: string): DetectedMarker[] {
     }
   }
 
-  spans.sort((a, b) => a.start - b.start || b.end - b.end || a.marker.id.localeCompare(b.marker.id));
+  spans.sort(
+    (a, b) =>
+      a.start - b.start ||
+      b.end - b.end ||
+      a.marker.id.localeCompare(b.marker.id),
+  );
 
   const accepted: MarkerSpan[] = [];
   for (const span of spans) {
-    if (accepted.some((kept) => span.start < kept.end && span.end > kept.start)) {
+    if (
+      accepted.some((kept) => span.start < kept.end && span.end > kept.start)
+    ) {
       continue;
     }
     accepted.push(span);
@@ -280,10 +312,11 @@ export interface SentimentResult {
  * three tokens before it is a negation token.
  */
 export function aggregateSentiment(text: string): SentimentResult {
-  const tokens = text
-    .toLowerCase()
-    .replace(/[’]/g, "'")
-    .match(/[a-z0-9']+|[\u2190-\u2BFF\u{1F000}-\u{1FAFF}\u2764]/gu) ?? [];
+  const tokens =
+    text
+      .toLowerCase()
+      .replace(/[’]/g, "'")
+      .match(/[a-z0-9']+|[\u2190-\u2BFF\u{1F000}-\u{1FAFF}\u2764]/gu) ?? [];
 
   const basis: string[] = [];
   let positive = 0;
@@ -306,12 +339,20 @@ export function aggregateSentiment(text: string): SentimentResult {
     }
 
     const token = tokens[index];
-    if (positiveSentimentEmoji.some((emoji) => token === emoji.toLowerCase() || token === emoji)) {
+    if (
+      positiveSentimentEmoji.some(
+        (emoji) => token === emoji.toLowerCase() || token === emoji,
+      )
+    ) {
       positive += 1;
       basis.push("1 positive emoji");
       continue;
     }
-    if (negativeSentimentEmoji.some((emoji) => token === emoji.toLowerCase() || token === emoji)) {
+    if (
+      negativeSentimentEmoji.some(
+        (emoji) => token === emoji.toLowerCase() || token === emoji,
+      )
+    ) {
       negative += 1;
       basis.push("1 negative emoji");
       continue;
@@ -343,7 +384,11 @@ export function aggregateSentiment(text: string): SentimentResult {
   }
 
   const sentiment: SentimentLabel =
-    positive > negative ? "POSITIVE" : negative > positive ? "NEGATIVE" : "NEUTRAL";
+    positive > negative
+      ? "POSITIVE"
+      : negative > positive
+        ? "NEGATIVE"
+        : "NEUTRAL";
   return { sentiment, basis };
 }
 
@@ -405,7 +450,10 @@ function clampConfidence(value: number): number {
   return Math.max(confidenceFloor, Math.min(confidenceCeiling, round2(value)));
 }
 
-function commentExplanation(markers: DetectedMarker[], sentiment: SentimentResult): string {
+function commentExplanation(
+  markers: DetectedMarker[],
+  sentiment: SentimentResult,
+): string {
   const markerSentence =
     markers.length > 0
       ? `Detected laughter markers ${markers.map((marker) => `"${marker.label}"`).join(", ")}`
@@ -421,13 +469,19 @@ function summarize(
   comments: CommentAnalysis[],
   corpusSize: number,
 ): HumorAnalysisSummary {
-  const laughterCommentCount = comments.filter((comment) => comment.isLaughter).length;
-  const laughterCoverage = corpusSize === 0 ? 0 : laughterCommentCount / corpusSize;
+  const laughterCommentCount = comments.filter(
+    (comment) => comment.isLaughter,
+  ).length;
+  const laughterCoverage =
+    corpusSize === 0 ? 0 : laughterCommentCount / corpusSize;
   const averageMarkersPerComment =
     corpusSize === 0
       ? 0
       : round2(
-          comments.reduce((total, comment) => total + comment.markers.length, 0) / corpusSize,
+          comments.reduce(
+            (total, comment) => total + comment.markers.length,
+            0,
+          ) / corpusSize,
         );
 
   const sentimentCounts: Record<SentimentLabel, number> = {
@@ -438,8 +492,9 @@ function summarize(
   for (const comment of comments) {
     sentimentCounts[comment.sentiment] += 1;
   }
-  const dominantSentiment = (Object.keys(sentimentCounts) as SentimentLabel[])
-    .sort((a, b) => sentimentCounts[b] - sentimentCounts[a])[0];
+  const dominantSentiment = (
+    Object.keys(sentimentCounts) as SentimentLabel[]
+  ).sort((a, b) => sentimentCounts[b] - sentimentCounts[a])[0];
 
   const categoryCommentCounts = Object.fromEntries(
     laughterMarkerCategories.map((category) => [
@@ -470,12 +525,14 @@ function summarize(
   const positiveShareAmongLaughter =
     laughterComments.length === 0
       ? 0
-      : laughterComments.filter((comment) => comment.sentiment === "POSITIVE").length /
-        laughterComments.length;
+      : laughterComments.filter((comment) => comment.sentiment === "POSITIVE")
+          .length / laughterComments.length;
   const laughterSignal =
     corpusSize === 0
       ? 0
-      : Math.round(100 * (0.7 * laughterCoverage + 0.3 * positiveShareAmongLaughter));
+      : Math.round(
+          100 * (0.7 * laughterCoverage + 0.3 * positiveShareAmongLaughter),
+        );
 
   const summaryExplanation = buildSummaryExplanation({
     corpusSize,
@@ -510,25 +567,32 @@ function buildSummaryExplanation(input: {
   if (input.corpusSize === 0) {
     return "The corpus is empty, so no laughter or sentiment evidence can be read.";
   }
-  const coveragePercent = Math.round((input.laughterCommentCount / input.corpusSize) * 100);
+  const coveragePercent = Math.round(
+    (input.laughterCommentCount / input.corpusSize) * 100,
+  );
   const coverageSentence = `${input.laughterCommentCount} of ${input.corpusSize} comments carried laughter markers (${coveragePercent}% coverage).`;
-  const { POSITIVE: positive, NEUTRAL: neutral, NEGATIVE: negative } = input.sentimentCounts;
+  const {
+    POSITIVE: positive,
+    NEUTRAL: neutral,
+    NEGATIVE: negative,
+  } = input.sentimentCounts;
   const sentimentSentence = `Sentiment runs ${input.dominantSentiment.toLowerCase()} (${positive} positive, ${neutral} neutral, ${negative} negative).`;
   // The leading category is the one with the MOST comments carrying it;
   // ties keep the lexicon's category order so output stays deterministic.
-  const leadingCategory = laughterMarkerCategories.reduce<LaughterMarkerCategory | null>(
-    (best, category) => {
-      const count = input.categoryCommentCounts[category];
-      if (count === 0) {
+  const leadingCategory =
+    laughterMarkerCategories.reduce<LaughterMarkerCategory | null>(
+      (best, category) => {
+        const count = input.categoryCommentCounts[category];
+        if (count === 0) {
+          return best;
+        }
+        if (best === null || count > input.categoryCommentCounts[best]) {
+          return category;
+        }
         return best;
-      }
-      if (best === null || count > input.categoryCommentCounts[best]) {
-        return category;
-      }
-      return best;
-    },
-    null,
-  );
+      },
+      null,
+    );
   const categorySentence = leadingCategory
     ? ` ${categoryDisplayNames[leadingCategory]} laughter led with ${
         input.categoryCommentCounts[leadingCategory]
@@ -544,7 +608,9 @@ function buildSummaryExplanation(input: {
  * percentages as measurement, no laughter markers at all, or no sentiment
  * language matched.
  */
-export function analyzeCommentCorpus(comments: readonly string[]): CommentCorpusAnalysis {
+export function analyzeCommentCorpus(
+  comments: readonly string[],
+): CommentCorpusAnalysis {
   const analyzed: CommentAnalysis[] = comments.map((text, position) => {
     const markers = detectMarkers(text);
     const sentiment = aggregateSentiment(text);
@@ -561,13 +627,18 @@ export function analyzeCommentCorpus(comments: readonly string[]): CommentCorpus
 
   const evidenceGaps: string[] = [];
   if (comments.length === 0) {
-    evidenceGaps.push("No comment excerpts were supplied, so there is no corpus to analyze.");
+    evidenceGaps.push(
+      "No comment excerpts were supplied, so there is no corpus to analyze.",
+    );
   } else if (comments.length <= smallCorpusThreshold) {
     evidenceGaps.push(
       `Fewer than ${smallCorpusThreshold} comments were supplied, so coverage shares are a hint rather than a measurement.`,
     );
   }
-  if (comments.length > 0 && analyzed.every((comment) => comment.markers.length === 0)) {
+  if (
+    comments.length > 0 &&
+    analyzed.every((comment) => comment.markers.length === 0)
+  ) {
     evidenceGaps.push(
       "No configured laughter markers appeared in the corpus, so the laughter signal is zero by evidence.",
     );
@@ -634,7 +705,11 @@ const humorAnalysisSummarySchema = z.object({
     hyperbole: z.number().int().nonnegative(),
   }),
   topMarkers: z.array(
-    z.object({ markerId: z.string(), label: z.string(), count: z.number().int().positive() }),
+    z.object({
+      markerId: z.string(),
+      label: z.string(),
+      count: z.number().int().positive(),
+    }),
   ),
   laughterSignal: z.number().int().min(0).max(100),
   summaryExplanation: z.string(),
@@ -670,4 +745,6 @@ export const humorAnalysisQuerySchema = z.object({
 
 export type HumorAnalysisResource = z.infer<typeof humorAnalysisResourceSchema>;
 export type HumorAnalysisResponse = z.infer<typeof humorAnalysisResponseSchema>;
-export type CreateHumorAnalysisRequest = z.infer<typeof createHumorAnalysisRequestSchema>;
+export type CreateHumorAnalysisRequest = z.infer<
+  typeof createHumorAnalysisRequestSchema
+>;
