@@ -16,7 +16,9 @@
     "playwright:install": "node scripts/provision-playwright.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run test:e2e",
     "db:generate": "drizzle-kit generate",
-    "db:seed": "tsx scripts/seed-candidates.ts"
+    "db:seed": "tsx scripts/seed-candidates.ts",
+    "db:reset": "tsx scripts/reset-demo.ts",
+    "demo:reset": "npm run db:reset"
   },
   "keywords": [],
   "author": "",
