@@ -47,7 +47,7 @@ type ProductionResult = z.infer<typeof productionResultSchema>;
 async function submitProduction(
   form: HTMLFormElement,
 ): Promise<ProductionResult> {
-  const response = await fetch("/api/productions", {
+  const response = await fetch("/api/demo/cartoons", {
     method: "POST",
     body: new FormData(form),
   });

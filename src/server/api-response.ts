@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
-import type { apiErrorCodes } from "@/shared/candidates";
-
-type ApiErrorCode = (typeof apiErrorCodes)[number];
-
-export function apiError(
-  code: ApiErrorCode,
+export function apiError<T extends string>(
+  code: T,
   message: string,
   status: number,
 ): NextResponse {

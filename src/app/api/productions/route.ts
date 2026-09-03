@@ -1,59 +1,37 @@
 import { NextResponse } from "next/server";
 
-import { createMockCartoon, MediaPipelineError } from "@/lib/media-pipeline";
+import { env } from "@/lib/env";
+import { getProductionRepository } from "@/server/productions/service";
+import { productionErrorResponse } from "@/server/productions/http";
+import {
+  createProductionRequestSchema,
+  productionDetailResponseSchema,
+} from "@/shared/productions";
 
-export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const errorMessages: Record<MediaPipelineError["code"], string> = {
-  INVALID_REQUEST:
-    "Choose an MP4 within the upload limit and confirm source rights.",
-  UNSUPPORTED_MEDIA_TYPE: "Upload the source as an MP4 video.",
-  UPLOAD_TOO_LARGE: "That MP4 is larger than the configured upload limit.",
-  INVALID_MEDIA_CONTENT: "That file does not contain playable MP4 media.",
-  SOURCE_TOO_SHORT: "The source must contain the selected 5–8 second segment.",
-  SOURCE_AUDIO_REQUIRED: "The source MP4 must include an audio track.",
-  MOCK_PROVIDERS_REQUIRED:
-    "The local demo requires MOCK image and animation providers.",
-  PROCESSING_FAILED: "The local cartoon could not be created. Try another MP4.",
-};
-
-function readNumber(formData: FormData, key: string): number | undefined {
-  const value = formData.get(key);
-  if (typeof value !== "string" || value.trim() === "") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : Number.NaN;
-}
-
+/**
+ * Creates a DRAFT production job for an approved candidate. Omitted provider
+ * selections persist the environment's configured defaults so provider
+ * attribution is always recorded.
+ */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const formData = await request.formData();
-    const source = formData.get("source");
-    if (!(source instanceof File)) {
-      throw new MediaPipelineError("INVALID_REQUEST");
-    }
-
-    const result = await createMockCartoon({
-      bytes: new Uint8Array(await source.arrayBuffer()),
-      contentType: source.type,
-      rightsConfirmed: formData.get("rightsConfirmed") === "true",
-      segmentStart: readNumber(formData, "segmentStart"),
-      segmentDuration: readNumber(formData, "segmentDuration"),
+    const body = createProductionRequestSchema.parse(await request.json());
+    const repository = getProductionRepository();
+    const id = repository.createDraft({
+      candidateId: body.candidateId,
+      segment: body.segment,
+      imageProvider: body.imageProvider ?? env.IMAGE_PROVIDER,
+      animationProvider: body.animationProvider ?? env.ANIMATION_PROVIDER,
+      now: new Date(),
     });
 
-    return NextResponse.json(result, { status: 201 });
-  } catch (error: unknown) {
-    const pipelineError =
-      error instanceof MediaPipelineError
-        ? error
-        : new MediaPipelineError("PROCESSING_FAILED");
-    return NextResponse.json(
-      {
-        error: {
-          code: pipelineError.code,
-          message: errorMessages[pipelineError.code],
-        },
-      },
-      { status: pipelineError.code === "PROCESSING_FAILED" ? 500 : 400 },
+    const detail = productionDetailResponseSchema.parse(
+      repository.getDetail(id),
     );
+    return NextResponse.json(detail, { status: 201 });
+  } catch (error) {
+    return productionErrorResponse(error);
   }
 }
