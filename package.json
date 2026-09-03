@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "playwright:install": "node scripts/provision-playwright.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run test:e2e",
+    "brand:assets": "tsx scripts/generate-brand-fixtures.ts",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx scripts/seed-candidates.ts",
     "db:reset": "tsx scripts/reset-demo.ts",
