@@ -289,6 +289,11 @@ export const editorialDecisions = sqliteTable(
   ],
 );
 
+export const workerHeartbeats = sqliteTable("worker_heartbeats", {
+  workerId: text("worker_id").primaryKey(),
+  observedAt: timestamp("observed_at").notNull(),
+});
+
 export const candidateRelations = relations(candidates, ({ many, one }) => ({
   comments: many(candidateComments),
   editorialDecisions: many(editorialDecisions),

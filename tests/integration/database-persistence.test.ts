@@ -139,6 +139,7 @@ describe("SQLite persistence", () => {
       "production_stages",
       "productions",
       "rights_confirmations",
+      "worker_heartbeats",
     ]);
     expect(connection.sqlite.pragma("foreign_keys", { simple: true })).toBe(1);
     expect(connection.sqlite.pragma("busy_timeout", { simple: true })).toBe(

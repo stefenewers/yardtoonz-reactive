@@ -70,6 +70,8 @@ test("health endpoint exposes only safe provider and tool diagnostics", async ({
     status: "ok",
     providers: { image: "MOCK", animation: "MOCK" },
     checks: {
+      database: { diagnostic: "available" },
+      artifactRoot: { diagnostic: "writable" },
       mediaTools: [
         { name: "ffmpeg", available: true, diagnostic: "available" },
         { name: "ffprobe", available: true, diagnostic: "available" },
@@ -77,8 +79,16 @@ test("health endpoint exposes only safe provider and tool diagnostics", async ({
     },
   });
 
+  // The worker may be fresh, stale, or unknown depending on local state; the
+  // public contract is that the value stays inside the bounded categories.
+  const workerDiagnostic = (
+    body as { checks: { worker: { diagnostic: string } } }
+  ).checks.worker.diagnostic;
+  expect(["fresh", "stale", "unknown"]).toContain(workerDiagnostic);
+
   const serialized = JSON.stringify(body);
   expect(serialized).not.toContain('"path"');
   expect(serialized).not.toContain('"error"');
   expect(serialized).not.toContain('"version"');
+  expect(serialized).not.toContain('"observedAt"');
 });

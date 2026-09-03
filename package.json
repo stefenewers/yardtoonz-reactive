@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "worker": "tsx src/worker/index.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

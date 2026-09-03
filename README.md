@@ -29,6 +29,7 @@ Open <http://localhost:3000>. The default `IMAGE_PROVIDER=MOCK` and `ANIMATION_P
 | `npm run dev`                | Start the development server                                      |
 | `npm run build`              | Build the production application                                  |
 | `npm run start`              | Start the built application                                       |
+| `npm run worker`             | Start the local production worker and its heartbeat               |
 | `npm run test`               | Run Vitest tests                                                  |
 | `npm run test:tools`         | Verify the package-managed FFmpeg and FFprobe binaries            |
 | `npm run test:e2e`           | Run the Playwright browser smoke test against a production build  |
@@ -43,7 +44,7 @@ CI runs `npm run playwright:install` followed by the same `npm run check` comman
 
 ## Local persistence
 
-SQLite migrations create the six specification tables for candidates, comments, productions, stages, artifacts, and editorial decisions. The existing rights-confirmation table remains the persisted hard gate for production jobs. Production timestamps use SQLite integer milliseconds internally, while the candidate API continues to expose UTC ISO timestamps.
+SQLite migrations create the six specification tables for candidates, comments, productions, stages, artifacts, and editorial decisions, plus the existing rights-confirmation hard gate and the operational `worker_heartbeats` table used by the health endpoint. Production timestamps use SQLite integer milliseconds internally, while the candidate API continues to expose UTC ISO timestamps.
 
 `npm run db:reset` removes only the configured database, SQLite sidecar files, and artifact directory when all paths resolve inside the application directory. It then applies every migration and loads the deterministic candidate fixtures. The command refuses in-memory databases, repository-root deletion, and paths outside the application directory.
 
@@ -53,7 +54,35 @@ Server configuration is parsed by Zod in `src/lib/env-schema.ts` and loaded only
 
 Validated stored-record contracts in `src/lib/production-records.ts` freeze both resolved selections onto each production job and require every artifact to name its actual producer (`USER_UPLOAD`, `FFMPEG`, `MOCK`, `OPENAI`, or `RUNWAY`). These contracts establish the persistence boundary for the later SQLite/Drizzle implementation without introducing live provider calls in the foundation.
 
-The public health endpoint reports the selected providers plus safe media-tool categories (`available`, `binary-unavailable`, `timed-out`, or `execution-failed`). Filesystem paths, raw process errors, and version output remain server-internal.
+## Health and observability
+
+`GET /api/health` aggregates four checks and reports only bounded diagnostic categories — never secrets, filesystem paths, version output, or raw exceptions:
+
+| Check            | Categories                                                                  |
+| ---------------- | --------------------------------------------------------------------------- |
+| Database         | `available`, `unavailable`                                                  |
+| Artifact root    | `writable`, `unwritable`                                                    |
+| Media tools      | `available`, `binary-unavailable`, `timed-out`, `execution-failed` per tool |
+| Worker heartbeat | `fresh`, `stale`, `unknown`                                                 |
+
+The aggregate `status` degrades only when the web service itself cannot serve: an unavailable database, an unwritable artifact root, or an unavailable media tool. The worker heartbeat is observational — `unknown` means no worker has reported yet (normal for web-only sessions and CI), and `stale` means a worker stopped reporting. A heartbeat is stale after 30 seconds or 30 worker poll intervals, whichever is longer.
+
+`npm run worker` starts the local worker process. It opens the database, verifies the artifact root, checks the package-managed FFmpeg and FFprobe binaries, and records a heartbeat into `worker_heartbeats` on every poll interval (`WORKER_POLL_MS`, default 1000 ms). Job claiming and stage processing arrive with the production engine; the heartbeat is the foundation the health endpoint observes. The worker fails fast with a stable error code (`WORKER_DB_OPEN_FAILED`, `WORKER_ARTIFACT_ROOT_UNWRITABLE`) when a dependency is broken.
+
+### Manual process and health check
+
+Verify the full stack locally before a demo:
+
+```bash
+npm run build
+npm run start &          # web server on http://localhost:3000
+npm run worker           # heartbeats into the configured database
+curl -s http://localhost:3000/api/health | jq
+```
+
+With the worker running, the report shows `worker: "fresh"` and `status: "ok"`. Stop the worker, wait past the staleness window, and request the endpoint again — the report shows `worker: "stale"` while the web service remains `ok`. Every server and worker event is a single-line JSON log with a timestamp, level, message, and structured context (request or job ID, worker ID, production ID, stage, attempt, provider, elapsed time, and stable error codes). Source file contents, provider credentials, and creative prompts are never logged.
+
+Filesystem paths, raw process errors, and version output remain server-internal for every check.
 
 ## Source documents
 
