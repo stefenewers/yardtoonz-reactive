@@ -11,6 +11,8 @@ import {
 } from "@/domain/candidate";
 import { overallWeightingSummary, platformLabels } from "@/domain/inbox";
 
+import { AnalystPanel } from "./analyst-panel";
+
 export interface CandidateDetailProps {
   candidate: Candidate;
   busy: boolean;
@@ -258,6 +260,7 @@ export function CandidateDetail({
                 <p>No comment evidence was supplied for this candidate.</p>
               )}
             </div>
+            <AnalystPanel candidateId={candidate.id} />
           </div>
         </div>
         <aside className="review-panel">

@@ -28,6 +28,11 @@ import {
   trendFeedSourceKinds,
 } from "@/shared/trend-scout";
 
+export const humorAnalysisCorpusSources = [
+  "DEMO_CORPUS",
+  "PERSISTED_EXCERPTS",
+] as const;
+
 export const productionStatuses = [
   "DRAFT",
   "RIGHTS_CONFIRMED",
@@ -486,6 +491,35 @@ export const agentRuns = sqliteTable(
   ],
 );
 
+/**
+ * Persisted Humor Analyst output. One current analysis per candidate: the
+ * analyst refreshes in place, so a row is always the latest evidence read
+ * over that candidate's comment corpus. Evidence only — it never feeds the
+ * locked candidate scoring.
+ */
+export const commentAnalyses = sqliteTable(
+  "comment_analyses",
+  {
+    id: text("id").primaryKey(),
+    candidateId: text("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    corpusSource: text("corpus_source", {
+      enum: humorAnalysisCorpusSources,
+    }).notNull(),
+    analysisJson: text("analysis_json").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("comment_analyses_candidate_unique").on(table.candidateId),
+    check(
+      "comment_analyses_corpus_source_valid",
+      sql`${table.corpusSource} IN ('DEMO_CORPUS', 'PERSISTED_EXCERPTS')`,
+    ),
+  ],
+);
+
 export const candidateRelations = relations(candidates, ({ many, one }) => ({
   comments: many(candidateComments),
   editorialDecisions: many(editorialDecisions),
@@ -592,3 +626,13 @@ export const storyboardRelations = relations(storyboards, ({ one }) => ({
     references: [candidates.id],
   }),
 }));
+
+export const commentAnalysisRelations = relations(
+  commentAnalyses,
+  ({ one }) => ({
+    candidate: one(candidates, {
+      fields: [commentAnalyses.candidateId],
+      references: [candidates.id],
+    }),
+  }),
+);
