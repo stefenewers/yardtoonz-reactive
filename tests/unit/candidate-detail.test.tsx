@@ -147,7 +147,10 @@ describe("CandidateDetail decision flows", () => {
       }),
     );
 
-    const banner = screen.getByRole("status");
+    // The page also embeds the Agent Control Center, which carries its own
+    // status region; scope to the decision banner.
+    const banner = document.querySelector(".decision-banner") as HTMLElement;
+    expect(banner).toBeTruthy();
     expect(banner.textContent).toContain("Rejected");
     expect(banner.textContent).toContain("Reason: Audio rights are unresolved");
     expect(banner.textContent).toContain(
@@ -176,7 +179,10 @@ describe("CandidateDetail decision flows", () => {
       }),
     );
 
-    const banner = screen.getByRole("status");
+    // The page also embeds the Agent Control Center, which carries its own
+    // status region; scope to the decision banner.
+    const banner = document.querySelector(".decision-banner") as HTMLElement;
+    expect(banner).toBeTruthy();
     expect(banner.textContent).toContain("Approved for production");
     expect(banner.textContent).toContain(
       formatDecisionTimestamp("2026-09-03T18:29:09.000Z"),
