@@ -396,10 +396,7 @@ describe("ProductionSetup", () => {
           makeDetail({ queued: true, withSource: true }),
         );
       }
-      if (
-        url === "/api/productions/prod-e51" &&
-        init?.method === "GET"
-      ) {
+      if (url === "/api/productions/prod-e51" && init?.method === "GET") {
         return jsonResponse(
           200,
           makeDetail({ queued: true, withSource: true }),

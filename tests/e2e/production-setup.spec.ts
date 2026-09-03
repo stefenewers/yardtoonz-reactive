@@ -94,10 +94,11 @@ test("authorized MP4 passes the setup gates and queues a persisted production", 
 
   await startButton.click();
 
+  // Queueing hands control to the authoritative job monitor.
   await expect(
-    page.getByRole("heading", { name: "Production queued" }),
+    page.getByRole("heading", { name: "Job monitor" }),
   ).toBeVisible();
-  await expect(page.getByText("All gates passed")).toBeVisible();
+  await expect(page.getByLabel("Production stage timeline")).toBeVisible();
   await expect(page.getByText("Image provider").locator("..")).toContainText(
     "Mock",
   );

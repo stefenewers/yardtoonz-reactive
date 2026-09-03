@@ -93,7 +93,10 @@ const artifactKindLabels: Record<ArtifactKind, string> = {
   FINAL_VIDEO: "Final video",
 };
 
-const artifactProviderLabels: Record<ProductionArtifactView["provider"], string> = {
+const artifactProviderLabels: Record<
+  ProductionArtifactView["provider"],
+  string
+> = {
   MOCK: "Mock",
   OPENAI: "OpenAI",
   RUNWAY: "Runway",

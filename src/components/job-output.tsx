@@ -235,11 +235,6 @@ export function JobOutput({
 
   return (
     <section className="job-panel" aria-labelledby="job-title">
-      {onBack && (
-        <button className="back-button" type="button" onClick={onBack}>
-          {backLabel}
-        </button>
-      )}
       <p className="eyebrow">Production job</p>
       <div className="job-heading">
         <h1 id="job-title">Job monitor</h1>
