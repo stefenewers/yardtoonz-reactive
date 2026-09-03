@@ -1,5 +1,3 @@
-import "server-only";
-
 import Database from "better-sqlite3";
 import {
   drizzle,
@@ -9,8 +7,6 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { env } from "@/lib/env";
-
 import * as schema from "./schema";
 
 function databasePath(databaseUrl: string): string {
@@ -18,10 +14,13 @@ function databasePath(databaseUrl: string): string {
     throw new Error("DATABASE_URL must use the file: scheme for local SQLite");
   }
 
-  return path.resolve(process.cwd(), databaseUrl.slice("file:".length));
+  return path.resolve(
+    /* turbopackIgnore: true */ process.cwd(),
+    databaseUrl.slice("file:".length),
+  );
 }
 
-export function openDatabase(databaseUrl = env.DATABASE_URL): {
+export function openDatabase(databaseUrl: string): {
   database: BetterSQLite3Database<typeof schema>;
   sqlite: Database.Database;
 } {
