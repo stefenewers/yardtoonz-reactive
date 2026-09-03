@@ -24,18 +24,28 @@ Open <http://localhost:3000>. The default `IMAGE_PROVIDER=MOCK` and `ANIMATION_P
 
 ## Commands
 
-| Command                      | Purpose                                                          |
-| ---------------------------- | ---------------------------------------------------------------- |
-| `npm run dev`                | Start the development server                                     |
-| `npm run build`              | Build the production application                                 |
-| `npm run start`              | Start the built application                                      |
-| `npm run test`               | Run Vitest tests                                                 |
-| `npm run test:tools`         | Verify the package-managed FFmpeg and FFprobe binaries           |
-| `npm run test:e2e`           | Run the Playwright browser smoke test against a production build |
-| `npm run playwright:install` | Provision and verify the platform-selected Chromium runtime      |
-| `npm run check`              | Run formatting, lint, types, tests, build, and browser QA        |
+| Command                      | Purpose                                                           |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `npm run dev`                | Start the development server                                      |
+| `npm run build`              | Build the production application                                  |
+| `npm run start`              | Start the built application                                       |
+| `npm run test`               | Run Vitest tests                                                  |
+| `npm run test:tools`         | Verify the package-managed FFmpeg and FFprobe binaries            |
+| `npm run test:e2e`           | Run the Playwright browser smoke test against a production build  |
+| `npm run playwright:install` | Provision and verify the platform-selected Chromium runtime       |
+| `npm run db:generate`        | Generate an additive migration from the Drizzle schema            |
+| `npm run db:seed`            | Seed candidate fixtures when the configured database is empty     |
+| `npm run db:reset`           | Recreate local demo data and seed the same candidate fixtures     |
+| `npm run demo:reset`         | Alias the guarded database and artifact reset for demo rehearsals |
+| `npm run check`              | Run formatting, lint, types, tests, build, and browser QA         |
 
 CI runs `npm run playwright:install` followed by the same `npm run check` command contributors run locally.
+
+## Local persistence
+
+SQLite migrations create the six specification tables for candidates, comments, productions, stages, artifacts, and editorial decisions. The existing rights-confirmation table remains the persisted hard gate for production jobs. Production timestamps use SQLite integer milliseconds internally, while the candidate API continues to expose UTC ISO timestamps.
+
+`npm run db:reset` removes only the configured database, SQLite sidecar files, and artifact directory when all paths resolve inside the application directory. It then applies every migration and loads the deterministic candidate fixtures. The command refuses in-memory databases, repository-root deletion, and paths outside the application directory.
 
 ## Environment validation
 
