@@ -315,6 +315,16 @@ export const directorTreatments = sqliteTable(
       .notNull()
       .references(() => candidates.id, { onDelete: "cascade" }),
     provider: text("provider", { enum: directorProviders }).notNull(),
+    /**
+     * Live-provider request ID for reconcile-before-retry. Written when a
+     * LIVE treatment run creates (or reconciles) a remote provider request.
+     */
+    providerRequestId: text("provider_request_id"),
+    /**
+     * Disclosed generating model for the run that produced the treatment;
+     * null when the row predates run attribution.
+     */
+    model: text("model"),
     treatmentJson: text("treatment_json").notNull(),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
@@ -323,7 +333,7 @@ export const directorTreatments = sqliteTable(
     uniqueIndex("director_treatments_candidate_unique").on(table.candidateId),
     check(
       "director_treatments_provider_valid",
-      sql`${table.provider} IN ('MOCK')`,
+      sql`${table.provider} IN ('MOCK', 'OPENAI')`,
     ),
   ],
 );

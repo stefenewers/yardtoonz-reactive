@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { animationProviders, imageProviders } from "./providers";
+import {
+  animationProviders,
+  directorProviders,
+  imageProviders,
+} from "./providers";
 
 const optionalSecret = z
   .string()
@@ -12,6 +16,7 @@ const optionalSecret = z
 const providerSettingKeys = {
   image: ["OPENAI_API_KEY", "OPENAI_IMAGE_MODEL"],
   animation: ["RUNWAY_API_KEY", "RUNWAY_MODEL"],
+  director: ["OPENAI_API_KEY", "OPENAI_DIRECTOR_MODEL"],
 } as const;
 
 type ProviderSettingKey =
@@ -21,7 +26,7 @@ function requireProviderSettings(
   environment: Partial<Record<ProviderSettingKey, string | undefined>>,
   context: z.RefinementCtx,
   selection: string,
-  selectionKey: "IMAGE_PROVIDER" | "ANIMATION_PROVIDER",
+  selectionKey: "IMAGE_PROVIDER" | "ANIMATION_PROVIDER" | "DIRECTOR_PROVIDER",
   settingKeys: readonly ProviderSettingKey[],
 ): void {
   for (const key of settingKeys) {
@@ -41,10 +46,12 @@ const serverEnvSchema = z
     ARTIFACT_ROOT: z.string().trim().min(1).default("./.data/artifacts"),
     IMAGE_PROVIDER: z.enum(imageProviders).default("MOCK"),
     ANIMATION_PROVIDER: z.enum(animationProviders).default("MOCK"),
+    DIRECTOR_PROVIDER: z.enum(directorProviders).default("MOCK"),
     MAX_UPLOAD_MB: z.coerce.number().int().positive().default(100),
     WORKER_POLL_MS: z.coerce.number().int().positive().default(1000),
     OPENAI_API_KEY: optionalSecret,
     OPENAI_IMAGE_MODEL: optionalSecret,
+    OPENAI_DIRECTOR_MODEL: optionalSecret,
     RUNWAY_API_KEY: optionalSecret,
     RUNWAY_MODEL: optionalSecret,
   })
@@ -66,6 +73,16 @@ const serverEnvSchema = z
         "RUNWAY",
         "ANIMATION_PROVIDER",
         providerSettingKeys.animation,
+      );
+    }
+
+    if (environment.DIRECTOR_PROVIDER === "OPENAI") {
+      requireProviderSettings(
+        environment,
+        context,
+        "OPENAI",
+        "DIRECTOR_PROVIDER",
+        providerSettingKeys.director,
       );
     }
   });

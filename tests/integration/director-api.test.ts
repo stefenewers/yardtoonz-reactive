@@ -226,7 +226,7 @@ describe("director treatment service", () => {
     const service = getDirectorTreatmentService();
     const candidateId = candidateFixtures[5]!.id;
 
-    const resource = treatmentOf(service.create({ candidateId }));
+    const resource = treatmentOf(await service.create({ candidateId }));
 
     expect(service.get(resource.id)).toEqual(resource);
     expect(service.getForCandidate(candidateId)).toEqual(resource);
@@ -266,7 +266,7 @@ describe("director treatment service", () => {
       "2026-09-03T12:00:00.000Z",
     );
 
-    const resource = treatmentOf(service.create({ candidateId }));
+    const resource = treatmentOf(await service.create({ candidateId }));
 
     expect(
       resource.treatment.evidenceGaps.some((gap) =>
@@ -286,7 +286,7 @@ describe("director treatment service", () => {
       "../../src/server/director/service"
     );
     expect(
-      getDirectorTreatmentService().create({ candidateId: "cand_ghost" }),
+      await getDirectorTreatmentService().create({ candidateId: "cand_ghost" }),
     ).toBe("CANDIDATE_NOT_FOUND");
   });
 });

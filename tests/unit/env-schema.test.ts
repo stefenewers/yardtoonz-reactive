@@ -10,6 +10,10 @@ const runwaySettings = {
   RUNWAY_API_KEY: "test-runway-key",
   RUNWAY_MODEL: "test-animation-model",
 };
+const openAiDirectorSettings = {
+  OPENAI_API_KEY: "test-openai-key",
+  OPENAI_DIRECTOR_MODEL: "test-director-model",
+};
 
 function getConfigurationError(
   input: Record<string, string | undefined>,
@@ -90,5 +94,52 @@ describe("parseServerEnvironment", () => {
   it("rejects invalid positive integer settings", () => {
     expect(() => parseServerEnvironment({ MAX_UPLOAD_MB: "0" })).toThrow();
     expect(() => parseServerEnvironment({ WORKER_POLL_MS: "1.5" })).toThrow();
+  });
+
+  it("keeps the credential-free mock director default", () => {
+    expect(parseServerEnvironment({})).toMatchObject({
+      DIRECTOR_PROVIDER: "MOCK",
+    });
+  });
+
+  it("accepts an OpenAI director provider with required settings", () => {
+    expect(
+      parseServerEnvironment({
+        DIRECTOR_PROVIDER: "OPENAI",
+        ...openAiDirectorSettings,
+      }),
+    ).toMatchObject({ DIRECTOR_PROVIDER: "OPENAI" });
+  });
+
+  it("requires only the selected director provider settings", () => {
+    const message = getConfigurationError({ DIRECTOR_PROVIDER: "OPENAI" });
+
+    expect(message).toContain(
+      "OPENAI_API_KEY is required when DIRECTOR_PROVIDER=OPENAI",
+    );
+    expect(message).toContain(
+      "OPENAI_DIRECTOR_MODEL is required when DIRECTOR_PROVIDER=OPENAI",
+    );
+    expect(message).not.toContain("RUNWAY_API_KEY is required");
+  });
+
+  it("rejects an unknown director provider selection", () => {
+    const message = getConfigurationError({
+      DIRECTOR_PROVIDER: "ANTHROPIC",
+      ...openAiDirectorSettings,
+    });
+
+    expect(message).toContain("DIRECTOR_PROVIDER");
+  });
+
+  it("does not require director credentials for image or animation selections", () => {
+    expect(
+      parseServerEnvironment({
+        IMAGE_PROVIDER: "OPENAI",
+        ANIMATION_PROVIDER: "RUNWAY",
+        ...openAiSettings,
+        ...runwaySettings,
+      }),
+    ).toMatchObject({ DIRECTOR_PROVIDER: "MOCK" });
   });
 });

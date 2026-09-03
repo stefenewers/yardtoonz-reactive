@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { apiError, invalidRequest } from "@/server/api-response";
+import { apiError } from "@/server/api-response";
+import { directorErrorResponse } from "@/server/director/http";
 import { getDirectorTreatmentService } from "@/server/director/service";
 import {
   createDirectorTreatmentRequestSchema,
@@ -15,7 +16,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const input = createDirectorTreatmentRequestSchema.parse(
       await request.json(),
     );
-    const outcome = getDirectorTreatmentService().create(input);
+    const outcome = await getDirectorTreatmentService().create(input);
     if (outcome === "CANDIDATE_NOT_FOUND") {
       return apiError("CANDIDATE_NOT_FOUND", "Candidate not found.", 404);
     }
@@ -24,7 +25,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       directorTreatmentResponseSchema.parse({ treatment: outcome }),
     );
   } catch (error) {
-    return invalidRequest(error, "Director");
+    return directorErrorResponse(error);
   }
 }
 
@@ -48,6 +49,6 @@ export async function GET(request: Request): Promise<NextResponse> {
       directorTreatmentResponseSchema.parse({ treatment: outcome }),
     );
   } catch (error) {
-    return invalidRequest(error, "Director");
+    return directorErrorResponse(error);
   }
 }
