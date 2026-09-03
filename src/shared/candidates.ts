@@ -81,12 +81,49 @@ export const listCandidatesResponseSchema = z
   .object({ candidates: z.array(candidateSchema) })
   .readonly();
 
+export const candidateSortFields = [
+  "overall",
+  "viralMomentum",
+  "humorResponse",
+  "yardToonzFit",
+] as const;
+export const candidateSortOrders = ["asc", "desc"] as const;
+
+export const candidateListQuerySchema = z
+  .object({
+    status: z.enum(candidateStatuses).optional(),
+    platform: z.enum(sourcePlatforms).optional(),
+    sort: z.enum(candidateSortFields).optional(),
+    order: z.enum(candidateSortOrders).optional(),
+  })
+  .strict()
+  .readonly();
+
 export const approveCandidateRequestSchema = z
   .object({ status: z.literal("APPROVED") })
   .strict()
   .readonly();
 export const approveCandidateResponseSchema = z
   .object({ candidate: candidateSchema })
+  .readonly();
+
+export const rejectCandidateRequestSchema = z
+  .object({
+    status: z.literal("REJECTED"),
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .readonly();
+export const restoreCandidateRequestSchema = z
+  .object({ status: z.literal("NEW") })
+  .strict()
+  .readonly();
+export const updateCandidateRequestSchema = z
+  .discriminatedUnion("status", [
+    approveCandidateRequestSchema,
+    rejectCandidateRequestSchema,
+    restoreCandidateRequestSchema,
+  ])
   .readonly();
 
 export const rightsConfirmationRequestSchema = z
@@ -112,6 +149,10 @@ export const apiErrorCodes = [
   "INVALID_REQUEST",
   "CANDIDATE_NOT_FOUND",
   "CANDIDATE_NOT_APPROVED",
+  "INVALID_CSV",
+  "INVALID_RECORD",
+  "DUPLICATE_ID",
+  "CANDIDATE_DECISION_CONFLICT",
   "INTERNAL_ERROR",
 ] as const;
 export const apiErrorResponseSchema = z
@@ -131,6 +172,18 @@ export type Candidate = z.infer<typeof candidateSchema>;
 export type ApproveCandidateRequest = z.infer<
   typeof approveCandidateRequestSchema
 >;
+export type RejectCandidateRequest = z.infer<
+  typeof rejectCandidateRequestSchema
+>;
+export type RestoreCandidateRequest = z.infer<
+  typeof restoreCandidateRequestSchema
+>;
+export type UpdateCandidateRequest = z.infer<
+  typeof updateCandidateRequestSchema
+>;
+export type CandidateSortField = (typeof candidateSortFields)[number];
+export type CandidateSortOrder = (typeof candidateSortOrders)[number];
+export type CandidateListQuery = z.infer<typeof candidateListQuerySchema>;
 export type RightsConfirmationRequest = z.infer<
   typeof rightsConfirmationRequestSchema
 >;

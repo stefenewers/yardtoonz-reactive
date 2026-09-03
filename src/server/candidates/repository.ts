@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { randomUUID } from "node:crypto";
 
@@ -10,6 +10,7 @@ import {
   engagementMetricsSchema,
   fitChecklistSchema,
   type Candidate,
+  type CandidateListQuery,
   type RightsConfirmation,
 } from "@/shared/candidates";
 
@@ -104,6 +105,51 @@ function insertCandidateRecords(
   return records.length;
 }
 
+/**
+ * Apply one editorial decision in the current transaction. Repeating the
+ * candidate's current decision is an idempotent no-op that never inserts a
+ * second editorial_decisions row.
+ */
+function recordDecision(
+  transaction: CandidateTransaction,
+  input: {
+    id: string;
+    decision: "APPROVED" | "REJECTED";
+    decidedAt: string;
+    reason?: string;
+  },
+): boolean {
+  const current = transaction
+    .select({ status: candidates.status })
+    .from(candidates)
+    .where(eq(candidates.id, input.id))
+    .get();
+  if (!current) return false;
+  if (current.status === input.decision) return true;
+
+  transaction
+    .update(candidates)
+    .set({
+      status: input.decision,
+      decisionReason: input.reason ?? null,
+      decidedAt: input.decidedAt,
+      updatedAt: input.decidedAt,
+    })
+    .where(eq(candidates.id, input.id))
+    .run();
+  transaction
+    .insert(editorialDecisions)
+    .values({
+      id: `decision_${randomUUID()}`,
+      candidateId: input.id,
+      decision: input.decision,
+      reason: input.decision === "REJECTED" ? (input.reason ?? null) : null,
+      decidedAt: input.decidedAt,
+    })
+    .run();
+  return true;
+}
+
 export function createCandidateRepository(database: Database) {
   function getCandidate(id: string): Candidate | undefined {
     const row = database
@@ -146,43 +192,91 @@ export function createCandidateRepository(database: Database) {
       );
     },
 
-    list(): Candidate[] {
-      return database
+    list(options: CandidateListQuery = {}): Candidate[] {
+      const filters = [
+        options.status ? eq(candidates.status, options.status) : undefined,
+        options.platform
+          ? eq(candidates.platform, options.platform)
+          : undefined,
+      ].filter((condition) => condition !== undefined);
+
+      const rows = database
         .select()
         .from(candidates)
-        .orderBy(desc(candidates.scoresJson))
-        .all()
+        .where(filters.length > 0 ? and(...filters) : undefined)
+        // Deterministic base order; the score sort below stays stable on ties.
+        .orderBy(asc(candidates.createdAt), asc(candidates.id))
+        .all();
+
+      const sort = options.sort ?? "overall";
+      const direction = options.order === "asc" ? 1 : -1;
+      const scoreOf = (candidate: Candidate): number =>
+        sort === "overall"
+          ? candidate.scores.overall
+          : candidate.scores[sort].score;
+
+      return rows
         .map((row) => getCandidate(row.id))
         .filter((candidate): candidate is Candidate => candidate !== undefined)
-        .sort((left, right) => right.scores.overall - left.scores.overall);
+        .sort((left, right) => direction * (scoreOf(left) - scoreOf(right)));
     },
 
     get: getCandidate,
 
     approve(id: string, decidedAt: string): Candidate | undefined {
       return database.transaction((transaction) => {
-        const existing = transaction
-          .select({ id: candidates.id })
+        const decided = recordDecision(transaction, {
+          id,
+          decision: "APPROVED",
+          decidedAt,
+        });
+        return decided ? getCandidate(id) : undefined;
+      });
+    },
+
+    reject(
+      id: string,
+      decidedAt: string,
+      reason?: string,
+    ): Candidate | undefined {
+      return database.transaction((transaction) => {
+        const decided = recordDecision(transaction, {
+          id,
+          decision: "REJECTED",
+          decidedAt,
+          reason,
+        });
+        return decided ? getCandidate(id) : undefined;
+      });
+    },
+
+    restore(
+      id: string,
+      decidedAt: string,
+    ): Candidate | "NOT_FOUND" | "INVALID_TRANSITION" {
+      return database.transaction((transaction) => {
+        const current = transaction
+          .select({ status: candidates.status })
           .from(candidates)
           .where(eq(candidates.id, id))
           .get();
-        if (!existing) return undefined;
-
-        transaction
-          .update(candidates)
-          .set({ status: "APPROVED", decidedAt, updatedAt: decidedAt })
-          .where(eq(candidates.id, id))
-          .run();
-        transaction
-          .insert(editorialDecisions)
-          .values({
-            id: `decision_${randomUUID()}`,
-            candidateId: id,
-            decision: "APPROVED",
-            decidedAt,
-          })
-          .run();
-        return getCandidate(id);
+        if (!current) return "NOT_FOUND";
+        // Restore is the rejected state's undo; an approved candidate keeps
+        // its approval because productions may already depend on it.
+        if (current.status === "APPROVED") return "INVALID_TRANSITION";
+        if (current.status === "REJECTED") {
+          transaction
+            .update(candidates)
+            .set({
+              status: "NEW",
+              decisionReason: null,
+              decidedAt: null,
+              updatedAt: decidedAt,
+            })
+            .where(eq(candidates.id, id))
+            .run();
+        }
+        return getCandidate(id) ?? "NOT_FOUND";
       });
     },
 

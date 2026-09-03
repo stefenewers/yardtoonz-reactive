@@ -44,8 +44,30 @@ export const candidateIntakeResultSchema = z
   })
   .readonly();
 
+export const candidateImportSources = ["CSV", "SEEDED"] as const;
+
+export const importCandidatesRequestSchema = z
+  .discriminatedUnion("source", [
+    z
+      .object({ source: z.literal("CSV"), csv: z.string().trim().min(1) })
+      .strict(),
+    z.object({ source: z.literal("SEEDED") }).strict(),
+  ])
+  .readonly();
+
+export const importCandidatesResponseSchema = z
+  .object({ import: candidateIntakeResultSchema })
+  .readonly();
+
 export type CandidateIntakeProviderKind = z.infer<
   typeof candidateIntakeProviderKindSchema
 >;
 export type CandidateIntakeRecord = z.infer<typeof candidateIntakeRecordSchema>;
 export type CandidateIntakeResult = z.infer<typeof candidateIntakeResultSchema>;
+export type CandidateImportSource = (typeof candidateImportSources)[number];
+export type ImportCandidatesRequest = z.infer<
+  typeof importCandidatesRequestSchema
+>;
+export type ImportCandidatesResponse = z.infer<
+  typeof importCandidatesResponseSchema
+>;
