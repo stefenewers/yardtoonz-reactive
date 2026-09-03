@@ -16,6 +16,17 @@ import { ArtifactStoreError, type ArtifactStore } from "@/lib/artifact-store";
 
 import { ProductionGateError } from "./errors";
 import {
+  agentKeyForStage,
+  failedRunDecision,
+  modelLabelFromMetadata,
+  stageCompleteConfidence,
+  stageCompleteDecision,
+  stageCompleteEvidence,
+  stageFailedEvidence,
+  stageProviderForRun,
+} from "@/domain/agent-trace";
+import { insertAgentRun } from "../agents/trace";
+import {
   getArtifactRecordId,
   isPipelineStageName,
   phaseEntryStage,
@@ -37,6 +48,33 @@ type Database = BetterSQLite3Database<typeof schema>;
 type ProductionRow = typeof productions.$inferSelect;
 type StageRow = typeof productionStages.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
+
+/**
+ * Stage row for trace attribution. Unreachable after the guarded lease
+ * update proved the row exists — the error type matches the race it would
+ * otherwise describe.
+ */
+function getStageRowForTrace(
+  transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
+  stageRowId: string,
+): StageRow {
+  const row = transaction
+    .select()
+    .from(productionStages)
+    .where(eq(productionStages.id, stageRowId))
+    .get();
+  if (!row) throw new ProductionTransitionError("WORKER_OWNERSHIP_CONFLICT");
+  return row;
+}
+
+/**
+ * Measured stage wall time for a trace row. Clamped to zero so a backward
+ * clock jump can never violate the non-negative elapsed check constraint.
+ */
+function stageElapsedMs(row: StageRow, now: Date): number | null {
+  if (!row.startedAt) return null;
+  return Math.max(0, now.getTime() - row.startedAt.getTime());
+}
 
 /** Statuses in which a production has claimable worker work. */
 const activeProductionStatuses = [
@@ -467,6 +505,41 @@ export function createProductionWorkerRepository(
             .run();
         }
 
+        // Named-agent trace: the run joins this transaction, so a trace row
+        // exists exactly when the stage's work persisted.
+        const agentKey = agentKeyForStage(input.stageName);
+        if (agentKey) {
+          const stageRow = getStageRowForTrace(transaction, input.stageRowId);
+          const provider = stageProviderForRun(input.stageName, production);
+          insertAgentRun(transaction, {
+            agentKey,
+            state: "COMPLETE",
+            attempt: stageRow.attempt,
+            inputEvidence: stageCompleteEvidence({
+              stageName: input.stageName,
+              fingerprint: input.fingerprint,
+              validationReport: input.validationReport,
+            }),
+            decision: stageCompleteDecision({
+              stageName: input.stageName,
+              provider,
+              validationReport: input.validationReport,
+            }),
+            confidence: stageCompleteConfidence(input.stageName),
+            provider,
+            model: modelLabelFromMetadata(
+              input.newArtifacts[0]?.metadata ?? {},
+            ),
+            elapsedMs: stageElapsedMs(stageRow, input.now),
+            artifactIds: input.newArtifacts.map((artifact) =>
+              getArtifactRecordId(input.productionId, artifact.kind),
+            ),
+            candidateId: production.candidateId,
+            productionId: production.id,
+            now: input.now,
+          });
+        }
+
         const phase = stagePhase[input.stageName];
         if (production.status !== phase) return;
 
@@ -585,6 +658,25 @@ export function createProductionWorkerRepository(
           })
           .where(eq(productions.id, input.productionId))
           .run();
+
+        // Named-agent trace for the observed failure, same transaction.
+        const stageRow = getStageRowForTrace(transaction, input.stageRowId);
+        const failedAgentKey = agentKeyForStage(stageRow.name);
+        if (failedAgentKey) {
+          insertAgentRun(transaction, {
+            agentKey: failedAgentKey,
+            state: "FAILED",
+            attempt: stageRow.attempt,
+            inputEvidence: stageFailedEvidence({ errorCode: input.errorCode }),
+            decision: failedRunDecision(input.safeErrorMessage),
+            provider: stageProviderForRun(stageRow.name, production),
+            elapsedMs: stageElapsedMs(stageRow, input.now),
+            artifactIds: [],
+            candidateId: production.candidateId,
+            productionId: production.id,
+            now: input.now,
+          });
+        }
       });
     },
 

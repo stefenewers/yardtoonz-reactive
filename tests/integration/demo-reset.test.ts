@@ -213,7 +213,20 @@ describe("demo reset", () => {
       candidateFixtures.length,
     );
     for (const table of userTables(afterSecond)) {
-      if (table === "candidates" || table === "candidate_comments") continue;
+      // Intake seeds the analysts' trace rows alongside the candidates, so
+      // agent_runs is seeded state too — two named-agent rows per candidate.
+      if (
+        table === "candidates" ||
+        table === "candidate_comments" ||
+        table === "agent_runs"
+      ) {
+        if (table === "agent_runs") {
+          expect(tableCount(afterSecond, table)).toBe(
+            candidateFixtures.length * 2,
+          );
+        }
+        continue;
+      }
       expect(tableCount(afterSecond, table)).toBe(0);
     }
     // The artifact root is recreated empty and ready for the next demo.

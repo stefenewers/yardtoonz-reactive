@@ -4,10 +4,17 @@ import {
   foreignKey,
   index,
   integer,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+
+import {
+  agentKeys,
+  agentRunProviders,
+  agentRunStates,
+} from "@/domain/agent-trace";
 
 import {
   animationProviders,
@@ -411,6 +418,74 @@ export const feedRuns = sqliteTable(
   ],
 );
 
+/**
+ * Persisted Control Center trace: one row per named-agent run, mutated in
+ * place through the same WAITING/RUNNING/COMPLETE/FAILED lifecycle the
+ * production stages use. Writers materialize a row only when the agent's
+ * work reaches a terminal state (COMPLETE or FAILED) so the trace records
+ * observed outcomes with measured elapsed time and produced artifact ids —
+ * never anticipated work. Insertion order (the autoincrement id) is the
+ * demo's chronological agent story per candidate.
+ */
+export const agentRuns = sqliteTable(
+  "agent_runs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    agentKey: text("agent_key", { enum: agentKeys }).notNull(),
+    state: text("state", { enum: agentRunStates }).notNull().default("WAITING"),
+    attempt: integer("attempt").notNull().default(1),
+    /** Bounded scalar record of the evidence the run actually received. */
+    inputEvidenceJson: text("input_evidence_json").notNull(),
+    decision: text("decision"),
+    /** Self-reported agent confidence; null when the agent reports none. */
+    confidence: real("confidence"),
+    /** Provider that performed the work; null for local deterministic agents. */
+    provider: text("provider", { enum: agentRunProviders }),
+    model: text("model"),
+    /** Measured wall time of the observed work; null when not measured. */
+    elapsedMs: integer("elapsed_ms"),
+    /** Artifact ids the run produced, in stable order (JSON array). */
+    artifactIdsJson: text("artifact_ids_json").notNull(),
+    candidateId: text("candidate_id").references(() => candidates.id, {
+      onDelete: "cascade",
+    }),
+    productionId: text("production_id").references(() => productions.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (table) => [
+    index("agent_runs_candidate_id_idx").on(table.candidateId),
+    index("agent_runs_production_id_idx").on(table.productionId),
+    check(
+      "agent_runs_agent_key_valid",
+      sql`${table.agentKey} IN ('trend-scout', 'humor-analyst', 'yardtoonz-director', 'clay-artist', 'animator', 'qa-inspector')`,
+    ),
+    check(
+      "agent_runs_state_valid",
+      sql`${table.state} IN ('WAITING', 'RUNNING', 'COMPLETE', 'FAILED')`,
+    ),
+    check(
+      "agent_runs_provider_valid",
+      sql`${table.provider} IS NULL OR ${table.provider} IN ('MOCK', 'OPENAI', 'RUNWAY')`,
+    ),
+    check("agent_runs_attempt_positive", sql`${table.attempt} > 0`),
+    check(
+      "agent_runs_confidence_bounds",
+      sql`${table.confidence} IS NULL OR (${table.confidence} >= 0 AND ${table.confidence} <= 1)`,
+    ),
+    check(
+      "agent_runs_elapsed_nonnegative",
+      sql`${table.elapsedMs} IS NULL OR ${table.elapsedMs} >= 0`,
+    ),
+    check(
+      "agent_runs_subject_link",
+      sql`${table.candidateId} IS NOT NULL OR ${table.productionId} IS NOT NULL`,
+    ),
+  ],
+);
+
 export const candidateRelations = relations(candidates, ({ many, one }) => ({
   comments: many(candidateComments),
   editorialDecisions: many(editorialDecisions),
@@ -489,6 +564,17 @@ export const editorialDecisionRelations = relations(
     }),
   }),
 );
+
+export const agentRunRelations = relations(agentRuns, ({ one }) => ({
+  candidate: one(candidates, {
+    fields: [agentRuns.candidateId],
+    references: [candidates.id],
+  }),
+  production: one(productions, {
+    fields: [agentRuns.productionId],
+    references: [productions.id],
+  }),
+}));
 
 export const directorTreatmentRelations = relations(
   directorTreatments,
