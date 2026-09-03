@@ -9,11 +9,14 @@ export function apiError<T extends string>(
   return NextResponse.json({ error: { code, message } }, { status });
 }
 
-export function invalidRequest(error: unknown): NextResponse {
+export function invalidRequest(
+  error: unknown,
+  scope = "Candidate",
+): NextResponse {
   if (error instanceof ZodError || error instanceof SyntaxError) {
     return apiError("INVALID_REQUEST", "The request body is invalid.", 400);
   }
 
-  console.error("Candidate API request failed", error);
+  console.error(`${scope} API request failed`, error);
   return apiError("INTERNAL_ERROR", "The request could not be completed.", 500);
 }

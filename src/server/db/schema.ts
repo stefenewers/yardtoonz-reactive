@@ -12,6 +12,7 @@ import {
 import {
   animationProviders,
   artifactProviders,
+  directorProviders,
   imageProviders,
 } from "@/lib/providers";
 
@@ -300,6 +301,33 @@ export const workerHeartbeats = sqliteTable("worker_heartbeats", {
   observedAt: timestamp("observed_at").notNull(),
 });
 
+/**
+ * Persisted Director Agent treatments. One current treatment per candidate:
+ * the unique candidate index makes treatment creation idempotent, so a
+ * repeated ask during the demo returns the same reviewable row instead of
+ * duplicating history that belongs to the agent-run trace.
+ */
+export const directorTreatments = sqliteTable(
+  "director_treatments",
+  {
+    id: text("id").primaryKey(),
+    candidateId: text("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: directorProviders }).notNull(),
+    treatmentJson: text("treatment_json").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("director_treatments_candidate_unique").on(table.candidateId),
+    check(
+      "director_treatments_provider_valid",
+      sql`${table.provider} IN ('MOCK')`,
+    ),
+  ],
+);
+
 export const candidateRelations = relations(candidates, ({ many, one }) => ({
   comments: many(candidateComments),
   editorialDecisions: many(editorialDecisions),
@@ -374,6 +402,16 @@ export const editorialDecisionRelations = relations(
     production: one(productions, {
       fields: [editorialDecisions.productionId],
       references: [productions.id],
+    }),
+  }),
+);
+
+export const directorTreatmentRelations = relations(
+  directorTreatments,
+  ({ one }) => ({
+    candidate: one(candidates, {
+      fields: [directorTreatments.candidateId],
+      references: [candidates.id],
     }),
   }),
 );
