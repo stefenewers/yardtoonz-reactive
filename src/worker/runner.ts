@@ -11,6 +11,13 @@ import {
   type StageUpstreamArtifact,
 } from "@/server/productions/pipeline";
 import {
+  createRunwayAnimationStageExecutor,
+  resolveRunwayStageConfig,
+} from "@/server/productions/runway-stage";
+import { createHttpRunwayTransport, RunwayAnimationError } from "@/lib/runway";
+import type { AnimationProvider } from "@/lib/providers";
+import { parseServerEnvironment } from "@/lib/env-schema";
+import {
   createProductionWorkerRepository,
   type PipelineStageState,
   type PipelineState,
@@ -37,6 +44,7 @@ interface StageFailure {
   errorCode: string;
   safeErrorMessage: string;
   errorDetail: string;
+  providerRequestId?: string | null;
 }
 
 function describeFailure(error: unknown): StageFailure {
@@ -47,11 +55,42 @@ function describeFailure(error: unknown): StageFailure {
       errorDetail: error.message,
     };
   }
+  if (error instanceof RunwayAnimationError) {
+    return {
+      errorCode: error.code,
+      safeErrorMessage: "A media processing step failed for this stage.",
+      errorDetail: error.message,
+      providerRequestId: error.requestId,
+    };
+  }
   return {
     errorCode: "MEDIA_PROCESSING_FAILED",
     safeErrorMessage: "A media processing step failed for this stage.",
     errorDetail: error instanceof Error ? error.message : "Unknown error",
   };
+}
+
+/**
+ * Provider-aware executor selection: the production's persisted animation
+ * selection decides which ANIMATE_IMAGE executor runs, so environment
+ * changes after job creation cannot rewrite a job's provider behavior.
+ */
+export function selectDefaultStageExecutor(
+  stageName: PipelineStageName,
+  animationProvider: AnimationProvider,
+  defaults: Record<PipelineStageName, StageExecutor>,
+  createRunwayAnimationExecutor?: () => StageExecutor,
+): StageExecutor {
+  if (stageName === "ANIMATE_IMAGE" && animationProvider === "RUNWAY") {
+    if (!createRunwayAnimationExecutor) {
+      throw new WorkerStageError(
+        "PROVIDER_REQUEST_FAILED",
+        "RUNWAY animation is selected but no animation executor is configured.",
+      );
+    }
+    return createRunwayAnimationExecutor();
+  }
+  return defaults[stageName];
 }
 
 /**
@@ -67,6 +106,22 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
   );
   const defaults = createDefaultStageExecutors();
   const leaseMs = input.options.leaseMs ?? defaultStageLeaseMs;
+
+  // Built lazily: only a production persisted with animationProvider=RUNWAY
+  // constructs the live transport, so mock/mock stays credential-free.
+  let runwayAnimationExecutor: StageExecutor | undefined;
+  const getRunwayAnimationExecutor = (): StageExecutor => {
+    // resolveRunwayStageConfig fails fast when RUNWAY is selected without
+    // valid credentials, so the transport only ever sees validated secrets.
+    const runwayConfig = resolveRunwayStageConfig(
+      parseServerEnvironment(process.env),
+    );
+    runwayAnimationExecutor ??= createRunwayAnimationStageExecutor({
+      transport: createHttpRunwayTransport(runwayConfig),
+      config: runwayConfig,
+    });
+    return runwayAnimationExecutor;
+  };
 
   for (const productionId of repository.listActiveProductionIds()) {
     const state = repository.loadPipelineState(productionId);
@@ -157,7 +212,13 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
     const productionId = state.production.id;
     const workerId = input.options.workerId;
     const executor =
-      input.options.executors?.[stage.name] ?? defaults[stage.name];
+      input.options.executors?.[stage.name] ??
+      selectDefaultStageExecutor(
+        stage.name,
+        state.production.animationProvider,
+        defaults,
+        getRunwayAnimationExecutor,
+      );
 
     try {
       const context = buildExecutorContext(state, stage);
@@ -201,6 +262,7 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
           workerId,
           errorCode: failure.errorCode,
           safeErrorMessage: failure.safeErrorMessage,
+          providerRequestId: failure.providerRequestId ?? null,
           now: new Date(),
         });
       } catch (persistError) {
@@ -258,6 +320,37 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
       },
       upstream,
       store: input.store,
+      priorProviderRequestId: findPriorProviderRequestId(state, stage),
+      recordProviderRequestId: async (requestId) =>
+        repository.recordStageProviderRequestId({
+          stageRowId: stage.row.id,
+          workerId: input.options.workerId,
+          providerRequestId: requestId,
+          now: new Date(),
+        }),
     };
+  }
+
+  /**
+   * The persisted anchor for reconcile-before-retry: this attempt's own row
+   * first (crash recovery), else the latest prior attempt's ID (retry).
+   */
+  function findPriorProviderRequestId(
+    state: PipelineState,
+    stage: PipelineStageState,
+  ): string | null {
+    if (stage.row.providerRequestId) return stage.row.providerRequestId;
+    const priorRows = state.stageRows.filter(
+      (row) =>
+        row.name === stage.name &&
+        row.attempt < stage.attempt &&
+        row.providerRequestId,
+    );
+    if (priorRows.length === 0) return null;
+    return (
+      priorRows.reduce((latest, row) =>
+        row.attempt > latest.attempt ? row : latest,
+      ).providerRequestId ?? null
+    );
   }
 }

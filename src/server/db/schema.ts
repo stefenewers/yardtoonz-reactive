@@ -184,6 +184,12 @@ export const productionStages = sqliteTable(
       .default("WAITING"),
     attempt: integer("attempt").notNull().default(1),
     inputFingerprint: text("input_fingerprint"),
+    /**
+     * Live-provider request ID for reconcile-before-retry. Written when a
+     * stage execution creates (or reconciles) a remote provider request so a
+     * retried attempt reconciles by request ID instead of generating again.
+     */
+    providerRequestId: text("provider_request_id"),
     startedAt: timestamp("started_at"),
     completedAt: timestamp("completed_at"),
     errorCode: text("error_code"),

@@ -94,6 +94,8 @@ export interface FailStageInput {
   readonly workerId: string;
   readonly errorCode: string;
   readonly safeErrorMessage: string;
+  /** Live-provider request ID persisted so a retry reconciles instead of regenerating. */
+  readonly providerRequestId?: string | null;
   readonly now: Date;
 }
 
@@ -446,6 +448,7 @@ export function createProductionWorkerRepository(
               sha256: artifact.sha256,
               parentArtifactIdsJson: JSON.stringify(parentIds ?? []),
               provider: expectedArtifactProvider(artifact.kind, production),
+              providerRequestId: artifact.providerRequestId ?? null,
               metadataJson: JSON.stringify(artifact.metadata),
               createdAt: input.now,
             })
@@ -456,6 +459,7 @@ export function createProductionWorkerRepository(
                 byteSize: artifact.byteSize,
                 sha256: artifact.sha256,
                 parentArtifactIdsJson: JSON.stringify(parentIds ?? []),
+                providerRequestId: artifact.providerRequestId ?? null,
                 metadataJson: JSON.stringify(artifact.metadata),
                 createdAt: input.now,
               },
@@ -536,6 +540,7 @@ export function createProductionWorkerRepository(
             status: "FAILED",
             errorCode: input.errorCode,
             safeErrorMessage: input.safeErrorMessage,
+            providerRequestId: input.providerRequestId ?? null,
             completedAt: input.now,
             updatedAt: input.now,
             workerLeaseOwner: null,
@@ -581,6 +586,37 @@ export function createProductionWorkerRepository(
           .where(eq(productions.id, input.productionId))
           .run();
       });
+    },
+
+    /**
+     * Durable reconcile-before-retry anchor: records the live-provider
+     * request ID on the running stage row the moment a provider accepts a
+     * request, so a worker crash mid-poll still leaves the ID for the next
+     * attempt to reconcile against. Guarded by stage lease ownership.
+     */
+    recordStageProviderRequestId(input: {
+      stageRowId: string;
+      workerId: string;
+      providerRequestId: string;
+      now: Date;
+    }): void {
+      const updated = database
+        .update(productionStages)
+        .set({
+          providerRequestId: input.providerRequestId,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(productionStages.id, input.stageRowId),
+            eq(productionStages.status, "RUNNING"),
+            eq(productionStages.workerLeaseOwner, input.workerId),
+          ),
+        )
+        .run();
+      if (updated.changes !== 1) {
+        throw new ProductionTransitionError("WORKER_OWNERSHIP_CONFLICT");
+      }
     },
 
     /**

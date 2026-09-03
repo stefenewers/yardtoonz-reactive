@@ -212,7 +212,9 @@ export type WorkerStageErrorCode =
   | "UPSTREAM_ARTIFACT_MISSING"
   | "MEDIA_PROCESSING_FAILED"
   | "OUTPUT_VALIDATION_FAILED"
-  | "IMAGE_PROVIDER_NOT_AVAILABLE";
+  | "IMAGE_PROVIDER_NOT_AVAILABLE"
+  | "PROVIDER_REQUEST_FAILED"
+  | "PROVIDER_UNKNOWN_OUTCOME";
 
 /** Typed stage failure carrying the stable error code persisted for retry. */
 export class WorkerStageError extends Error {
@@ -479,6 +481,16 @@ export interface StageExecutorContext {
   };
   readonly upstream: readonly StageUpstreamArtifact[];
   readonly store: ArtifactStore;
+  /**
+   * Live-provider request ID from a prior attempt of this stage, persisted
+   * so retries reconcile remote state instead of generating again.
+   */
+  readonly priorProviderRequestId?: string | null;
+  /**
+   * Durable anchor for reconcile-before-retry: called as soon as a live
+   * provider accepts a new request so a crash mid-poll still records it.
+   */
+  readonly recordProviderRequestId?: (requestId: string) => Promise<void>;
 }
 
 export type StageArtifactMetadata = Record<
@@ -493,6 +505,8 @@ export interface StageOutputArtifact {
   readonly byteSize: number;
   readonly sha256: string;
   readonly metadata: StageArtifactMetadata;
+  /** Provider request lineage for live-provider outputs (amendment art_2yKin00n). */
+  readonly providerRequestId?: string;
 }
 
 export interface StageExecutionResult {
@@ -504,7 +518,7 @@ export type StageExecutor = (
   context: StageExecutorContext,
 ) => Promise<StageExecutionResult>;
 
-function requireUpstream(
+export function requireUpstream(
   context: StageExecutorContext,
   kind: ArtifactKind,
 ): StageUpstreamArtifact {
