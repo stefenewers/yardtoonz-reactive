@@ -165,6 +165,10 @@ export const directorTreatmentResourceSchema = z
     id: z.string().trim().min(1),
     candidateId: z.string().trim().min(1),
     provider: z.enum(directorProviders),
+    // Attribution for the run that produced the treatment: the generating
+    // model's disclosed name, or null when the row predates attribution.
+    model: z.string().trim().min(1).nullable(),
+    providerRequestId: z.string().trim().min(1).nullable(),
     createdAt: z.iso.datetime(),
     treatment: directorTreatmentSchema,
   })
@@ -181,6 +185,10 @@ export const directorApiErrorCodes = [
   "INVALID_REQUEST",
   "CANDIDATE_NOT_FOUND",
   "TREATMENT_NOT_FOUND",
+  // A live request whose remote outcome is unknown: reconcile by request ID
+  // before any retry; regenerating is a human-approved decision.
+  "TREATMENT_UNRESOLVED",
+  "PROVIDER_REQUEST_FAILED",
   "INTERNAL_ERROR",
 ] as const;
 export type DirectorApiErrorCode = (typeof directorApiErrorCodes)[number];
@@ -226,6 +234,9 @@ export const evidenceConfidencePenalties: Record<
 
 /** The mock ceiling stays below 1.0: received evidence is never certainty. */
 export const mockDirectorConfidenceCeiling = 0.95;
+
+/** Disclosed model attribution for the deterministic in-repo treatment generator. */
+export const mockDirectorModelLabel = "mock-deterministic-v1";
 
 export const evidenceWeights = {
   commentWithLaughter: 0.9,

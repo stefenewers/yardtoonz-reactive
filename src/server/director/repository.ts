@@ -20,6 +20,8 @@ function parseTreatmentResource(row: TreatmentRow): DirectorTreatmentResource {
     id: row.id,
     candidateId: row.candidateId,
     provider: row.provider,
+    model: row.model,
+    providerRequestId: row.providerRequestId,
     createdAt: new Date(row.createdAt).toISOString(),
     treatment: directorTreatmentSchema.parse(JSON.parse(row.treatmentJson)),
   });
@@ -56,6 +58,8 @@ export function createDirectorTreatmentRepository(database: Database) {
     id: string;
     candidateId: string;
     provider: DirectorProvider;
+    model: string | null;
+    providerRequestId: string | null;
     treatment: DirectorTreatment;
     now: Date;
   }): DirectorTreatmentResource {
@@ -66,6 +70,8 @@ export function createDirectorTreatmentRepository(database: Database) {
           id: input.id,
           candidateId: input.candidateId,
           provider: input.provider,
+          model: input.model,
+          providerRequestId: input.providerRequestId,
           treatmentJson: JSON.stringify(input.treatment),
           createdAt: input.now,
           updatedAt: input.now,

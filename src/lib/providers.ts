@@ -14,11 +14,11 @@ export const artifactProviders = [
 export type ArtifactProvider = (typeof artifactProviders)[number];
 
 /**
- * Director treatment providers. Only the deterministic MOCK service exists
- * today; live structured-output mode requires explicit approval before it
- * is wired (AGENTS.md live-provider constraint).
+ * Director treatment providers. OPENAI is the LIVE structured-output
+ * provider (wired with explicit approval in the Director LIVE PR); MOCK
+ * stays the deterministic credential-free default.
  */
-export const directorProviders = ["MOCK"] as const;
+export const directorProviders = ["MOCK", "OPENAI"] as const;
 export type DirectorProvider = (typeof directorProviders)[number];
 
 /**
