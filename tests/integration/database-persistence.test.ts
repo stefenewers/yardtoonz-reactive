@@ -135,6 +135,7 @@ describe("SQLite persistence", () => {
       "artifacts",
       "candidate_comments",
       "candidates",
+      "director_treatments",
       "editorial_decisions",
       "production_stages",
       "productions",
