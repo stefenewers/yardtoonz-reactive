@@ -5,6 +5,7 @@ import { getPlaywrightLaunchOptions } from "./scripts/playwright-browser.mjs";
 const launchOptions = await getPlaywrightLaunchOptions();
 
 export default defineConfig({
+  globalSetup: "./tests/e2e/global-setup.ts",
   testDir: "./tests/e2e",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
