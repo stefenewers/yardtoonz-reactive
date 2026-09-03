@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   formatMetric,
@@ -8,9 +8,21 @@ import {
   type Candidate,
   type ScoreEvidence,
 } from "@/domain/candidate";
+import {
+  defaultInboxSort,
+  healthDisplay,
+  humanizeProvider,
+  overallWeightingSummary,
+  platformLabels,
+  providerModeLabel,
+  type InboxSortState,
+} from "@/domain/inbox";
 import { createApiCandidateClient } from "@/lib/candidate-client";
+import { fetchHealthReport } from "@/lib/health-client";
+import type { PublicHealthReportPayload } from "@/shared/health";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import { ProductionStudio } from "@/app/produce/production-studio";
+import { CandidateInbox } from "@/components/candidate-inbox";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
 type RequestState = "idle" | "loading" | "error";
@@ -19,13 +31,6 @@ interface CandidateWorkspaceProps {
   imageProvider: ImageProvider;
   animationProvider: AnimationProvider;
 }
-
-const platformLabels: Record<Candidate["platform"], string> = {
-  TIKTOK: "TikTok",
-  INSTAGRAM: "Instagram",
-  YOUTUBE: "YouTube",
-  OTHER: "Other",
-};
 
 function ScoreCard({
   label,
@@ -80,15 +85,45 @@ export function CandidateWorkspace({
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [error, setError] = useState<string>();
   const [rightsChecked, setRightsChecked] = useState(false);
+  const [sort, setSort] = useState<InboxSortState>(defaultInboxSort);
+  const [fetchedAt, setFetchedAt] = useState<number>();
+  const [health, setHealth] = useState<PublicHealthReportPayload>();
+  const [healthFailed, setHealthFailed] = useState(false);
 
-  async function loadCandidates() {
+  useEffect(() => {
+    let active = true;
+
+    async function refreshHealth() {
+      try {
+        const report = await fetchHealthReport();
+        if (!active) return;
+        setHealth(report);
+        setHealthFailed(false);
+      } catch {
+        if (!active) return;
+        setHealthFailed(true);
+      }
+    }
+
+    void refreshHealth();
+    const interval = window.setInterval(refreshHealth, 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  async function loadCandidates(requestedSort: InboxSortState = sort) {
     setRequestState("loading");
     setError(undefined);
+    const observedAt = Date.now();
     try {
-      const loaded = await client.listCandidates();
-      setCandidates(
-        [...loaded].sort((a, b) => b.scores.overall - a.scores.overall),
-      );
+      const loaded = await client.listCandidates({
+        sort: requestedSort.field,
+        order: requestedSort.order,
+      });
+      setCandidates(loaded);
+      setFetchedAt(observedAt);
       setRequestState("idle");
     } catch (caught) {
       setError(
@@ -98,6 +133,11 @@ export function CandidateWorkspace({
       );
       setRequestState("error");
     }
+  }
+
+  function changeSort(next: InboxSortState) {
+    setSort(next);
+    void loadCandidates(next);
   }
 
   function openCandidate(candidate: Candidate) {
@@ -152,6 +192,7 @@ export function CandidateWorkspace({
   }
 
   const busy = requestState === "loading";
+  const healthTone = healthDisplay(health, healthFailed);
 
   return (
     <div className="workspace-shell">
@@ -168,28 +209,37 @@ export function CandidateWorkspace({
           </span>
         </button>
         <div className="header-meta">
-          <span className="mode-pill">Demo workspace</span>
-          <span className="health">
-            <i /> System ready
+          {health && (
+            <>
+              <span className="mode-pill">
+                {providerModeLabel(
+                  health.providers.image,
+                  health.providers.animation,
+                )}
+              </span>
+              <span className="provider-pill">
+                Image · {humanizeProvider(health.providers.image)}
+              </span>
+              <span className="provider-pill">
+                Animation · {humanizeProvider(health.providers.animation)}
+              </span>
+            </>
+          )}
+          <span className={`health health--${healthTone.tone}`} role="status">
+            <i aria-hidden="true" />
+            {healthTone.label}
           </span>
         </div>
       </header>
 
       <main className="workspace-main">
-        {error && (
+        {error && screen !== "inbox" && (
           <div className="error-banner" role="alert">
             <div>
               <strong>We hit a snag</strong>
               <p>{error}</p>
             </div>
-            <button
-              type="button"
-              onClick={
-                screen === "inbox"
-                  ? loadCandidates
-                  : () => setRequestState("idle")
-              }
-            >
+            <button type="button" onClick={() => setRequestState("idle")}>
               Try again
             </button>
           </div>
@@ -209,7 +259,7 @@ export function CandidateWorkspace({
                 <button
                   className="secondary-button"
                   type="button"
-                  onClick={loadCandidates}
+                  onClick={() => loadCandidates()}
                   disabled={busy}
                 >
                   Refresh candidates
@@ -221,87 +271,17 @@ export function CandidateWorkspace({
               animationProvider={animationProvider}
             />
 
-            {busy && candidates.length === 0 ? (
-              <div
-                className="candidate-list"
-                aria-label="Loading candidates"
-                aria-busy="true"
-              >
-                {Array.from({ length: 4 }, (_, index) => (
-                  <div className="candidate-card skeleton" key={index}>
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                ))}
-              </div>
-            ) : candidates.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-sticker">10</span>
-                <h2>Your desk is clear</h2>
-                <p>
-                  Load the deterministic demo set to review ten ranked moments.
-                  Nothing is imported from social platforms.
-                </p>
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={loadCandidates}
-                >
-                  Load demo candidates
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="list-toolbar">
-                  <p>
-                    <strong>{candidates.length} candidates</strong> · Ranked by
-                    overall score
-                  </p>
-                  <span>Highest opportunity first</span>
-                </div>
-                <div className="candidate-list">
-                  {candidates.map((candidate, index) => (
-                    <button
-                      className="candidate-card"
-                      type="button"
-                      key={candidate.id}
-                      onClick={() => openCandidate(candidate)}
-                    >
-                      <span className="rank">#{index + 1}</span>
-                      <span className="thumbnail" aria-hidden="true">
-                        {platformLabels[candidate.platform].slice(0, 2)}
-                      </span>
-                      <span className="candidate-copy">
-                        <small>
-                          {platformLabels[candidate.platform]} ·{" "}
-                          {candidate.sourceLabel}
-                        </small>
-                        <strong>{candidate.caption}</strong>
-                        <em>
-                          {candidate.metrics.shares === undefined
-                            ? "Shares not supplied"
-                            : `${formatMetric(candidate.metrics.shares)} shares`}
-                        </em>
-                      </span>
-                      <span className="mini-score">
-                        <small>Overall</small>
-                        <strong>{candidate.scores.overall}</strong>
-                        <em>{scoreLabel(candidate.scores.overall)}</em>
-                      </span>
-                      <span
-                        className={`status status--${candidate.status.toLowerCase()}`}
-                      >
-                        {candidate.status === "NEW" ? "New" : "Approved"}
-                      </span>
-                      <span className="arrow" aria-hidden="true">
-                        →
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <CandidateInbox
+              candidates={candidates}
+              loading={busy}
+              error={error}
+              sort={sort}
+              nowMs={fetchedAt}
+              onSortChange={changeSort}
+              onRetry={() => loadCandidates()}
+              onLoadDemo={() => loadCandidates()}
+              onOpenCandidate={openCandidate}
+            />
           </section>
         )}
 
@@ -362,6 +342,7 @@ export function CandidateWorkspace({
                   <strong>{selected.scores.overall}</strong>
                   <em>{scoreLabel(selected.scores.overall)}</em>
                 </div>
+                <p className="weighting-note">{overallWeightingSummary()}</p>
                 <ScoreCard
                   label="Viral momentum"
                   evidence={selected.scores.viralMomentum}
