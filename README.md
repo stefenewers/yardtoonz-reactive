@@ -41,8 +41,20 @@ CI runs `npm run playwright:install` followed by the same `npm run check` comman
 
 Server configuration is parsed by Zod in `src/lib/env-schema.ts` and loaded only through `src/lib/env.ts`. Invalid numeric values fail startup. Image and animation providers are selected independently, so mock/mock, OpenAI/mock, mock/Runway, and OpenAI/Runway configurations are representable. OpenAI settings are required only when `IMAGE_PROVIDER=OPENAI`; Runway settings are required only when `ANIMATION_PROVIDER=RUNWAY`. Live adapters remain intentionally outside this PR.
 
+Validated stored-record contracts in `src/lib/production-records.ts` freeze both resolved selections onto each production job and require every artifact to name its actual producer (`USER_UPLOAD`, `FFMPEG`, `MOCK`, `OPENAI`, or `RUNWAY`). These contracts establish the persistence boundary for the later SQLite/Drizzle implementation without introducing live provider calls in the foundation.
+
 The public health endpoint reports the selected providers plus safe media-tool categories (`available`, `binary-unavailable`, `timed-out`, or `execution-failed`). Filesystem paths, raw process errors, and version output remain server-internal.
 
 ## Source documents
 
-The approved Product, UX, Technical, Brand, and Demo documents are copied under `docs/`. Each file starts with its published Obvious artifact ID so later implementation work can trace requirements to the exact source.
+Repository mirrors under `docs/` retain published Obvious artifact IDs so later implementation work can trace requirements to the exact source. The amendment supersedes only its named sections; every other requirement in the original artifacts remains authoritative.
+
+| Source                                      | Artifact ID                                                          | Repository mirror                                 |
+| ------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------- |
+| Initiative Brief                            | `art_9vDxr93f`                                                       | Provenance retained in the amendment mirror       |
+| Product Specification                       | `art_ocJIIoS8`                                                       | `docs/product-spec.md`                            |
+| UX Specification                            | `art_a8bSEyOy`                                                       | `docs/ux-spec.md`                                 |
+| Technical Specification                     | `art_37lEeMmB`                                                       | `docs/technical-spec.md`                          |
+| Brand and Visual Style Guide                | `art_1LwAYmSU`                                                       | `docs/brand-style-guide.md`                       |
+| Build and Demo Runbook                      | `art_PHtWViaT`                                                       | `docs/demo-runbook.md`                            |
+| Provider and Runtime Architecture Amendment | `art_2yKin00n` (snapshot `75a492970ad21538500738143b6b442cae975a3d`) | `docs/provider-runtime-architecture-amendment.md` |

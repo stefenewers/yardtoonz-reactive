@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { animationProviders, imageProviders } from "./providers";
+
 const optionalSecret = z
   .string()
   .trim()
@@ -37,8 +39,8 @@ const serverEnvSchema = z
   .object({
     DATABASE_URL: z.string().trim().min(1).default("file:./.data/yardtoonz.db"),
     ARTIFACT_ROOT: z.string().trim().min(1).default("./.data/artifacts"),
-    IMAGE_PROVIDER: z.enum(["MOCK", "OPENAI"]).default("MOCK"),
-    ANIMATION_PROVIDER: z.enum(["MOCK", "RUNWAY"]).default("MOCK"),
+    IMAGE_PROVIDER: z.enum(imageProviders).default("MOCK"),
+    ANIMATION_PROVIDER: z.enum(animationProviders).default("MOCK"),
     MAX_UPLOAD_MB: z.coerce.number().int().positive().default(100),
     WORKER_POLL_MS: z.coerce.number().int().positive().default(1000),
     OPENAI_API_KEY: optionalSecret,
