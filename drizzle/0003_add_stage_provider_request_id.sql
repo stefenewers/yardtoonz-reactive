@@ -1,0 +1,1 @@
+ALTER TABLE `production_stages` ADD `provider_request_id` text;

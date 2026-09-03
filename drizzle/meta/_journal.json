@@ -22,6 +22,13 @@
       "when": 1788456690180,
       "tag": "0002_add_worker_heartbeats",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788461457745,
+      "tag": "0003_add_stage_provider_request_id",
+      "breakpoints": true
     }
   ]
 }

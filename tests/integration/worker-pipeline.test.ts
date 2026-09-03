@@ -25,13 +25,17 @@ import {
   productionStages,
 } from "../../src/server/db/schema";
 import {
+  createDefaultStageExecutors,
   WorkerStageError,
   type PipelineStageName,
   type StageExecutor,
 } from "../../src/server/productions/pipeline";
 import { createProductionRepository } from "../../src/server/productions/repository";
 import { createProductionWorkerRepository } from "../../src/server/productions/worker-repository";
-import { runWorkerTick } from "../../src/worker/runner";
+import {
+  runWorkerTick,
+  selectDefaultStageExecutor,
+} from "../../src/worker/runner";
 
 const execFileAsync = promisify(execFile);
 
@@ -122,7 +126,10 @@ function createHarness(): Harness {
 }
 
 /** Seeds an approved candidate with confirmed rights and a queued production whose source is stored. */
-async function seedAndQueue(harness: Harness): Promise<string> {
+async function seedAndQueue(
+  harness: Harness,
+  animationProvider: "MOCK" | "RUNWAY" = "MOCK",
+): Promise<string> {
   harness.candidates.seed(candidateFixtures, "2026-09-03T12:00:00.000Z");
   const candidateId = candidateFixtures[0]!.id;
   harness.candidates.approve(candidateId, "2026-09-03T12:01:00.000Z");
@@ -136,7 +143,7 @@ async function seedAndQueue(harness: Harness): Promise<string> {
     candidateId,
     segment: SEGMENT,
     imageProvider: "MOCK",
-    animationProvider: "MOCK",
+    animationProvider,
     now: NOW,
   });
   // Links the candidate's persisted rights row onto the production so the
@@ -406,6 +413,128 @@ describe("worker media pipeline", () => {
       }
     },
   );
+
+  it(
+    "attributes RUNWAY productions to the RUNWAY provider with request lineage",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "RUNWAY");
+
+      // The default mock animation executor stands in for the real Runway
+      // executor here: same artifact contract, no network. The point is the
+      // production's persisted provider selection, not the media source.
+      const defaults = createDefaultStageExecutors();
+      harness.executors = {
+        ANIMATE_IMAGE: async (context) => {
+          const result = await defaults.ANIMATE_IMAGE(context);
+          return {
+            artifacts: result.artifacts.map((artifact) => ({
+              ...artifact,
+              providerRequestId: "runway-e2e-1",
+            })),
+          };
+        },
+      };
+      await runUntil(harness, id, "COMPLETE");
+
+      const animationRow = artifactRows(harness, id).find(
+        (row) => row.kind === "SILENT_ANIMATION",
+      )!;
+      // Honest attribution from the production's selection, with request
+      // lineage persisted on the artifact row.
+      expect(animationRow.provider).toBe("RUNWAY");
+      expect(animationRow.providerRequestId).toBe("runway-e2e-1");
+
+      // The styled frame still attributes to the image provider selection.
+      const styledRow = artifactRows(harness, id).find(
+        (row) => row.kind === "STYLED_FRAME",
+      )!;
+      expect(styledRow.provider).toBe("MOCK");
+    },
+  );
+
+  it("persists the provider request ID when a stage fails for reconciliation", async () => {
+    const harness = createHarness();
+    const id = await seedAndQueue(harness, "RUNWAY");
+    const stage = harness.database
+      .select()
+      .from(productionStages)
+      .where(eq(productionStages.productionId, id))
+      .all()
+      .find((row) => row.name === "EXTRACT_MEDIA")!;
+
+    expect(
+      harness.worker.claimStage({
+        stageRowId: stage.id,
+        stageName: "EXTRACT_MEDIA",
+        productionId: id,
+        workerId: WORKER_ID,
+        now: NOW,
+        leaseMs: 60_000,
+      }),
+    ).toBe(true);
+    // The runner moves the job into a worker-owned phase before executing;
+    // failStage's FAIL transition requires that state.
+    harness.worker.beginExtraction({
+      productionId: id,
+      workerId: WORKER_ID,
+      now: NOW,
+    });
+
+    harness.worker.failStage({
+      productionId: id,
+      stageRowId: stage.id,
+      workerId: WORKER_ID,
+      errorCode: "PROVIDER_UNKNOWN_OUTCOME",
+      safeErrorMessage: "A media processing step failed for this stage.",
+      providerRequestId: "runway-fail-1",
+      now: new Date(NOW.getTime() + 1_000),
+    });
+
+    const failedStage = harness.database
+      .select()
+      .from(productionStages)
+      .where(eq(productionStages.id, stage.id))
+      .get()!;
+    expect(failedStage.status).toBe("FAILED");
+    expect(failedStage.providerRequestId).toBe("runway-fail-1");
+    expect(failedStage.errorCode).toBe("PROVIDER_UNKNOWN_OUTCOME");
+  });
+
+  it("selects the Runway animation executor only for RUNWAY productions", () => {
+    const defaults = createDefaultStageExecutors();
+    const runwayExecutor: StageExecutor = async () => ({ artifacts: [] });
+    const createRunway = () => runwayExecutor;
+
+    expect(
+      selectDefaultStageExecutor(
+        "ANIMATE_IMAGE",
+        "RUNWAY",
+        defaults,
+        createRunway,
+      ),
+    ).toBe(runwayExecutor);
+    // MOCK productions never touch the Runway factory.
+    expect(
+      selectDefaultStageExecutor("ANIMATE_IMAGE", "MOCK", defaults, () => {
+        throw new Error("must not construct a Runway executor");
+      }),
+    ).toBe(defaults.ANIMATE_IMAGE);
+    // Other stages always use the defaults.
+    expect(
+      selectDefaultStageExecutor(
+        "STYLE_IMAGE",
+        "RUNWAY",
+        defaults,
+        createRunway,
+      ),
+    ).toBe(defaults.STYLE_IMAGE);
+    // A RUNWAY production with no executor configured fails fast.
+    expect(() =>
+      selectDefaultStageExecutor("ANIMATE_IMAGE", "RUNWAY", defaults),
+    ).toThrow(WorkerStageError);
+  });
 
   it(
     "refuses to retry when an upstream artifact no longer matches its digest",
