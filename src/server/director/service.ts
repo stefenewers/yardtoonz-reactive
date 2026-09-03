@@ -150,8 +150,7 @@ export function createDirectorTreatmentService(
         commentCount: candidate.commentExcerpts.length,
         adaptationNoteSupplied: candidate.adaptationNote !== undefined,
         transcriptSupplied: request.transcript !== undefined,
-        sourceVideoMetadataSupplied:
-          request.sourceVideoMetadata !== undefined,
+        sourceVideoMetadataSupplied: request.sourceVideoMetadata !== undefined,
         keyframeCount: request.keyframes?.length ?? 0,
         creativeDirectionSupplied: request.creativeDirection !== undefined,
       };

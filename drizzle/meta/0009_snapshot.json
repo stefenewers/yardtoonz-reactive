@@ -1,9 +1,185 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4041b2b3-6ae9-48db-b187-58a8150fc1b8",
-  "prevId": "0109717b-8d3c-484f-b3f4-4d795d608d83",
+  "id": "babf3a6d-9bd3-41bb-8cb6-27a884df9fa4",
+  "prevId": "e293d745-db6b-4e3d-9cb5-729989f817f1",
   "tables": {
+    "agent_runs": {
+      "name": "agent_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "agent_key": {
+          "name": "agent_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'WAITING'"
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "input_evidence_json": {
+          "name": "input_evidence_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "elapsed_ms": {
+          "name": "elapsed_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "artifact_ids_json": {
+          "name": "artifact_ids_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "production_id": {
+          "name": "production_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "agent_runs_candidate_id_idx": {
+          "name": "agent_runs_candidate_id_idx",
+          "columns": ["candidate_id"],
+          "isUnique": false
+        },
+        "agent_runs_production_id_idx": {
+          "name": "agent_runs_production_id_idx",
+          "columns": ["production_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "agent_runs_candidate_id_candidates_id_fk": {
+          "name": "agent_runs_candidate_id_candidates_id_fk",
+          "tableFrom": "agent_runs",
+          "tableTo": "candidates",
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_runs_production_id_productions_id_fk": {
+          "name": "agent_runs_production_id_productions_id_fk",
+          "tableFrom": "agent_runs",
+          "tableTo": "productions",
+          "columnsFrom": ["production_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "agent_runs_agent_key_valid": {
+          "name": "agent_runs_agent_key_valid",
+          "value": "\"agent_runs\".\"agent_key\" IN ('trend-scout', 'humor-analyst', 'yardtoonz-director', 'clay-artist', 'animator', 'qa-inspector')"
+        },
+        "agent_runs_state_valid": {
+          "name": "agent_runs_state_valid",
+          "value": "\"agent_runs\".\"state\" IN ('WAITING', 'RUNNING', 'COMPLETE', 'FAILED')"
+        },
+        "agent_runs_provider_valid": {
+          "name": "agent_runs_provider_valid",
+          "value": "\"agent_runs\".\"provider\" IS NULL OR \"agent_runs\".\"provider\" IN ('MOCK', 'OPENAI', 'RUNWAY')"
+        },
+        "agent_runs_attempt_positive": {
+          "name": "agent_runs_attempt_positive",
+          "value": "\"agent_runs\".\"attempt\" > 0"
+        },
+        "agent_runs_confidence_bounds": {
+          "name": "agent_runs_confidence_bounds",
+          "value": "\"agent_runs\".\"confidence\" IS NULL OR (\"agent_runs\".\"confidence\" >= 0 AND \"agent_runs\".\"confidence\" <= 1)"
+        },
+        "agent_runs_elapsed_nonnegative": {
+          "name": "agent_runs_elapsed_nonnegative",
+          "value": "\"agent_runs\".\"elapsed_ms\" IS NULL OR \"agent_runs\".\"elapsed_ms\" >= 0"
+        },
+        "agent_runs_subject_link": {
+          "name": "agent_runs_subject_link",
+          "value": "\"agent_runs\".\"candidate_id\" IS NOT NULL OR \"agent_runs\".\"production_id\" IS NOT NULL"
+        }
+      }
+    },
     "artifacts": {
       "name": "artifacts",
       "columns": {
@@ -413,7 +589,7 @@
       "checkConstraints": {
         "director_treatments_provider_valid": {
           "name": "director_treatments_provider_valid",
-          "value": "\"director_treatments\".\"provider\" IN ('MOCK')"
+          "value": "\"director_treatments\".\"provider\" IN ('MOCK', 'OPENAI')"
         }
       }
     },
@@ -513,6 +689,117 @@
         "editorial_decisions_value_valid": {
           "name": "editorial_decisions_value_valid",
           "value": "\"editorial_decisions\".\"decision\" IN ('APPROVED', 'REJECTED')"
+        }
+      }
+    },
+    "feed_runs": {
+      "name": "feed_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "themes_json": {
+          "name": "themes_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_kind": {
+          "name": "source_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "discovered_count": {
+          "name": "discovered_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "duplicate_count": {
+          "name": "duplicate_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "imported_count": {
+          "name": "imported_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "imported_candidate_ids_json": {
+          "name": "imported_candidate_ids_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "safe_error_message": {
+          "name": "safe_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "feed_runs_status_valid": {
+          "name": "feed_runs_status_valid",
+          "value": "\"feed_runs\".\"status\" IN ('COMPLETE', 'FAILED')"
+        },
+        "feed_runs_failure_reports_error": {
+          "name": "feed_runs_failure_reports_error",
+          "value": "(\"feed_runs\".\"status\" = 'FAILED' AND \"feed_runs\".\"error_code\" IS NOT NULL) OR (\"feed_runs\".\"status\" = 'COMPLETE' AND \"feed_runs\".\"error_code\" IS NULL)"
+        },
+        "feed_runs_counts_nonnegative": {
+          "name": "feed_runs_counts_nonnegative",
+          "value": "\"feed_runs\".\"discovered_count\" >= 0 AND \"feed_runs\".\"duplicate_count\" >= 0 AND \"feed_runs\".\"imported_count\" >= 0"
+        },
+        "feed_runs_completed_after_started": {
+          "name": "feed_runs_completed_after_started",
+          "value": "\"feed_runs\".\"completed_at\" >= \"feed_runs\".\"started_at\""
         }
       }
     },
@@ -911,6 +1198,86 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
+    },
+    "storyboards": {
+      "name": "storyboards",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "treatment_id": {
+          "name": "treatment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "plan_json": {
+          "name": "plan_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "storyboards_candidate_unique": {
+          "name": "storyboards_candidate_unique",
+          "columns": ["candidate_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "storyboards_candidate_id_candidates_id_fk": {
+          "name": "storyboards_candidate_id_candidates_id_fk",
+          "tableFrom": "storyboards",
+          "tableTo": "candidates",
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "storyboards_provider_valid": {
+          "name": "storyboards_provider_valid",
+          "value": "\"storyboards\".\"provider\" IN ('MOCK')"
+        }
+      }
     },
     "worker_heartbeats": {
       "name": "worker_heartbeats",

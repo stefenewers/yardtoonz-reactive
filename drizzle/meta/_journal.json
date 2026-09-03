@@ -40,8 +40,15 @@
     {
       "idx": 5,
       "version": "6",
-      "when": 1788474246132,
-      "tag": "0005_add_agent_runs",
+      "when": 1788474334491,
+      "tag": "0005_director_run_attribution_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788474349990,
+      "tag": "0006_director_provider_openai_check",
       "breakpoints": true
     },
     {
@@ -56,6 +63,13 @@
       "version": "6",
       "when": 1788476603387,
       "tag": "0008_add_feed_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788477135499,
+      "tag": "0009_add_agent_runs",
       "breakpoints": true
     }
   ]
