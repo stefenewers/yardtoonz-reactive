@@ -66,7 +66,7 @@ export const candidateSchema = z
     publishedAt: z.iso.datetime().optional(),
     observedAt: z.iso.datetime(),
     metrics: engagementMetricsSchema,
-    commentExcerpts: z.array(z.string()),
+    commentExcerpts: z.array(z.string().trim().min(1)),
     adaptationNote: z.string().trim().min(1).optional(),
     scores: candidateScoresSchema,
     status: z.enum(candidateStatuses),
