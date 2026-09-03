@@ -140,6 +140,7 @@ describe("SQLite persistence", () => {
       "production_stages",
       "productions",
       "rights_confirmations",
+      "storyboards",
       "worker_heartbeats",
     ]);
     expect(connection.sqlite.pragma("foreign_keys", { simple: true })).toBe(1);

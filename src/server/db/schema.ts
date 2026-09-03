@@ -338,11 +338,36 @@ export const directorTreatments = sqliteTable(
   ],
 );
 
+/**
+ * Persisted storyboards. One current storyboard per candidate, derived
+ * from that candidate's Director treatment: the treatment is the only
+ * input, so a storyboard row is a cue-plan snapshot of one treatment.
+ */
+export const storyboards = sqliteTable(
+  "storyboards",
+  {
+    id: text("id").primaryKey(),
+    candidateId: text("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: directorProviders }).notNull(),
+    treatmentId: text("treatment_id").notNull(),
+    planJson: text("plan_json").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("storyboards_candidate_unique").on(table.candidateId),
+    check("storyboards_provider_valid", sql`${table.provider} IN ('MOCK')`),
+  ],
+);
+
 export const candidateRelations = relations(candidates, ({ many, one }) => ({
   comments: many(candidateComments),
   editorialDecisions: many(editorialDecisions),
   productions: many(productions),
   rightsConfirmation: one(rightsConfirmations),
+  storyboards: many(storyboards),
 }));
 
 export const candidateCommentRelations = relations(
@@ -425,3 +450,10 @@ export const directorTreatmentRelations = relations(
     }),
   }),
 );
+
+export const storyboardRelations = relations(storyboards, ({ one }) => ({
+  candidate: one(candidates, {
+    fields: [storyboards.candidateId],
+    references: [candidates.id],
+  }),
+}));
