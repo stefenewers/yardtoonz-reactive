@@ -235,4 +235,43 @@ describe("collectHealthReport", () => {
     expect(report.checks.database).toEqual({ diagnostic: "available" });
     expect(report.checks.worker).toEqual({ diagnostic: "unknown" });
   });
+
+  it("reopens the cached connection after the database file is replaced", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const environment = {
+      ...healthEnvironment("./artifacts"),
+      DATABASE_URL: "file:./state/yardtoonz.db",
+    };
+
+    const first = await collectHealthReport({
+      environment,
+      workingDirectory,
+      migrationsFolder,
+    });
+    expect(first.checks.database).toEqual({ diagnostic: "available" });
+
+    // demo:reset removes and recreates the database file under a live server.
+    await rm(path.join(workingDirectory, "state"), {
+      recursive: true,
+      force: true,
+    });
+    const replacement = openDatabase("file:./state/yardtoonz.db", {
+      migrationsFolder,
+      workingDirectory,
+    });
+    openConnections.push(replacement);
+    recordWorkerHeartbeat(replacement.database, {
+      workerId: "worker-after-reset",
+      observedAt: Date.now(),
+    });
+
+    const second = await collectHealthReport({
+      environment,
+      workingDirectory,
+      migrationsFolder,
+    });
+
+    expect(second.checks.database).toEqual({ diagnostic: "available" });
+    expect(second.checks.worker).toEqual({ diagnostic: "fresh" });
+  });
 });
