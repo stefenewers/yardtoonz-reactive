@@ -3,7 +3,7 @@ import {
   candidateSchema,
   type Candidate,
   type CandidateReviewClient,
-} from "@/domain/candidate";
+} from "../domain/candidate";
 
 const score = (value: number, explanation: string, inputsUsed: string[]) => ({
   score: value,
