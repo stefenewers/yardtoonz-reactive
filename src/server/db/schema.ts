@@ -15,6 +15,11 @@ import {
   directorProviders,
   imageProviders,
 } from "@/lib/providers";
+import {
+  feedRunErrorCodes,
+  feedRunStatuses,
+  trendFeedSourceKinds,
+} from "@/shared/trend-scout";
 
 export const productionStatuses = [
   "DRAFT",
@@ -359,6 +364,50 @@ export const storyboards = sqliteTable(
   (table) => [
     uniqueIndex("storyboards_candidate_unique").on(table.candidateId),
     check("storyboards_provider_valid", sql`${table.provider} IN ('MOCK')`),
+  ],
+);
+
+/**
+ * Persisted Trend Scout runs. One row per run request: which themed feeds
+ * were examined, what the fingerprint dedupe found, and which candidates
+ * were imported, so the inbox header can show a trustworthy last-run
+ * status without recomputing anything.
+ */
+export const feedRuns = sqliteTable(
+  "feed_runs",
+  {
+    id: text("id").primaryKey(),
+    themesJson: text("themes_json").notNull(),
+    status: text("status", { enum: feedRunStatuses }).notNull(),
+    sourceKind: text("source_kind", {
+      enum: trendFeedSourceKinds,
+    }).notNull(),
+    discoveredCount: integer("discovered_count").notNull(),
+    duplicateCount: integer("duplicate_count").notNull(),
+    importedCount: integer("imported_count").notNull(),
+    importedCandidateIdsJson: text("imported_candidate_ids_json").notNull(),
+    errorCode: text("error_code", { enum: feedRunErrorCodes }),
+    safeErrorMessage: text("safe_error_message"),
+    startedAt: timestamp("started_at").notNull(),
+    completedAt: timestamp("completed_at").notNull(),
+  },
+  (table) => [
+    check(
+      "feed_runs_status_valid",
+      sql`${table.status} IN ('COMPLETE', 'FAILED')`,
+    ),
+    check(
+      "feed_runs_failure_reports_error",
+      sql`(${table.status} = 'FAILED' AND ${table.errorCode} IS NOT NULL) OR (${table.status} = 'COMPLETE' AND ${table.errorCode} IS NULL)`,
+    ),
+    check(
+      "feed_runs_counts_nonnegative",
+      sql`${table.discoveredCount} >= 0 AND ${table.duplicateCount} >= 0 AND ${table.importedCount} >= 0`,
+    ),
+    check(
+      "feed_runs_completed_after_started",
+      sql`${table.completedAt} >= ${table.startedAt}`,
+    ),
   ],
 );
 

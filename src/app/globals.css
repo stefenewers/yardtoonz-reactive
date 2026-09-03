@@ -992,6 +992,38 @@ input:focus-visible {
   box-shadow: 0 0 0 4px rgb(255 249 232 / 8%);
 }
 
+/* Trend Scout header action */
+.scout-action {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.scout-status {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.scout-status--complete {
+  border-color: var(--success);
+}
+
+.scout-status--failed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.scout-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.scout-run-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

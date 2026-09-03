@@ -8,6 +8,7 @@ import { fitChecklistKeys } from "@/shared/candidates";
 import {
   candidateIntakeRecordSchema,
   type CandidateIntakeProviderKind,
+  type CandidateIntakeRecord,
   type CandidateIntakeResult,
 } from "@/shared/candidate-intake";
 
@@ -46,6 +47,18 @@ export function createManualCandidateIntakeProvider(
   payload: unknown,
 ): CandidateIntakeProvider {
   return { kind: "MANUAL", load: () => [payload] };
+}
+
+/**
+ * Intake point for the Trend Scout: feed items already normalized by the
+ * scout domain arrive as intake records and pass through the same
+ * validation, scoring, and non-destructive persistence as every other
+ * provider. The scout dedupes by fingerprint before handing records over.
+ */
+export function createTrendFeedCandidateIntakeProvider(
+  records: readonly CandidateIntakeRecord[],
+): CandidateIntakeProvider {
+  return { kind: "TREND_FEED", load: () => records };
 }
 
 const csvMetricColumns = [

@@ -17,6 +17,7 @@ import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import { CandidateDetail } from "@/components/candidate-detail";
 import { CandidateInbox } from "@/components/candidate-inbox";
 import { ProductionSetup } from "@/components/production-setup";
+import { ScoutHeaderAction } from "@/components/scout-header-action";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
 type RequestState = "idle" | "loading" | "error";
@@ -241,6 +242,7 @@ export function CandidateWorkspace({
             <i aria-hidden="true" />
             {healthTone.label}
           </span>
+          <ScoutHeaderAction onImported={() => loadCandidates()} />
         </div>
       </header>
 
