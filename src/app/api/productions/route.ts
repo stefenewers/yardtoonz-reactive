@@ -4,6 +4,7 @@ import { apiError } from "@/server/api-response";
 import { env } from "@/lib/env";
 import { getProductionRepository } from "@/server/productions/service";
 import { productionErrorResponse } from "@/server/productions/http";
+import { assertProviderCredentials } from "@/server/productions/provider-credentials";
 import {
   createProductionRequestSchema,
   listProductionsResponseSchema,
@@ -40,17 +41,23 @@ export async function GET(request: Request): Promise<NextResponse> {
 /**
  * Creates a DRAFT production job for an approved candidate. Omitted provider
  * selections persist the environment's configured defaults so provider
- * attribution is always recorded.
+ * attribution is always recorded. The EFFECTIVE selection — request value or
+ * environment default — is validated against that provider's credentials
+ * before persistence, so a live provider the environment cannot serve fails
+ * fast at creation instead of mid-pipeline.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body = createProductionRequestSchema.parse(await request.json());
     const repository = getProductionRepository();
+    const imageProvider = body.imageProvider ?? env.IMAGE_PROVIDER;
+    const animationProvider = body.animationProvider ?? env.ANIMATION_PROVIDER;
+    assertProviderCredentials({ imageProvider, animationProvider }, env);
     const id = repository.createDraft({
       candidateId: body.candidateId,
       segment: body.segment,
-      imageProvider: body.imageProvider ?? env.IMAGE_PROVIDER,
-      animationProvider: body.animationProvider ?? env.ANIMATION_PROVIDER,
+      imageProvider,
+      animationProvider,
       now: new Date(),
     });
 

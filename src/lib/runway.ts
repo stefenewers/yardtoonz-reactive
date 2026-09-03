@@ -112,6 +112,12 @@ export interface RunwayGenerateInput {
   readonly imageMimeType: string;
   readonly model: string;
   readonly durationSeconds: number;
+  /**
+   * Optional text prompt steering the generation (the production's persisted
+   * creative direction). Omitted when the job carries none, so the provider
+   * receives an image-only generation exactly as before this field existed.
+   */
+  readonly promptText?: string;
 }
 
 export interface RunwayTransport {
@@ -209,6 +215,8 @@ export function createHttpRunwayTransport(
         body: JSON.stringify({
           model: input.model,
           promptImage: toDataUrl(input.imageBytes, input.imageMimeType),
+          // JSON.stringify drops the key entirely when no prompt is set.
+          promptText: input.promptText?.trim() || undefined,
           ratio: "720:1280",
           duration: Math.round(input.durationSeconds),
         }),

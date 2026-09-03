@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { candidateFixtures } from "../../fixtures/candidates";
 import { mediaToolPaths } from "../../src/lib/media-tools";
@@ -395,5 +395,98 @@ describe("production API flow", () => {
       code: "PRODUCTION_ALREADY_ACTIVE",
       status: 409,
     });
+  });
+});
+
+describe("provider credential gating", () => {
+  afterEach(() => {
+    for (const key of [
+      "OPENAI_API_KEY",
+      "OPENAI_IMAGE_MODEL",
+      "RUNWAY_API_KEY",
+      "RUNWAY_MODEL",
+    ]) {
+      delete process.env[key];
+    }
+  });
+
+  async function listProductionCount(): Promise<number> {
+    const { GET } = await import("../../src/app/api/productions/route");
+    const response = await GET(
+      new Request(`${productionsUrl}?candidateId=${approvedCandidateId}`),
+    );
+    const body = (await response.json()) as {
+      productions: { id: string }[];
+    };
+    return body.productions.length;
+  }
+
+  it("fails fast with 400 when OPENAI is selected without credentials", async () => {
+    const { POST } = await import("../../src/app/api/productions/route");
+    const before = await listProductionCount();
+
+    const response = await POST(
+      jsonRequest(
+        {
+          candidateId: approvedCandidateId,
+          segment,
+          imageProvider: "OPENAI",
+        },
+        "POST",
+        productionsUrl,
+      ),
+    );
+
+    expect(await errorOf(response)).toEqual({
+      code: "PROVIDER_CREDENTIALS_REQUIRED",
+      status: 400,
+    });
+    // The validation happens before the draft is persisted.
+    expect(await listProductionCount()).toBe(before);
+  });
+
+  it("fails fast with 400 when RUNWAY is selected without credentials", async () => {
+    const { POST } = await import("../../src/app/api/productions/route");
+
+    const response = await POST(
+      jsonRequest(
+        {
+          candidateId: approvedCandidateId,
+          segment,
+          animationProvider: "RUNWAY",
+        },
+        "POST",
+        productionsUrl,
+      ),
+    );
+
+    expect(await errorOf(response)).toEqual({
+      code: "PROVIDER_CREDENTIALS_REQUIRED",
+      status: 400,
+    });
+  });
+
+  it("accepts mock selections with no provider settings configured", async () => {
+    const { POST } = await import("../../src/app/api/productions/route");
+
+    const response = await POST(
+      jsonRequest(
+        {
+          candidateId: approvedCandidateId,
+          segment,
+          imageProvider: "MOCK",
+          animationProvider: "MOCK",
+        },
+        "POST",
+        productionsUrl,
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      production: { imageProvider: string; animationProvider: string };
+    };
+    expect(body.production.imageProvider).toBe("MOCK");
+    expect(body.production.animationProvider).toBe("MOCK");
   });
 });

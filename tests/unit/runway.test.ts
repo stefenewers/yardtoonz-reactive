@@ -97,6 +97,55 @@ describe("HTTP Runway transport", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("routes promptText through the creation body when the job provides one", async () => {
+    let wireBody: Record<string, unknown> = {};
+    const fetchImpl = stubFetch((_url, init) => {
+      wireBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return jsonResponse(200, { id: "task-prompt-1" });
+    });
+    const transport = createHttpRunwayTransport({
+      ...credentials,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await transport.createAnimationTask({
+      imageBytes: new Uint8Array([1]),
+      imageMimeType: "image/png",
+      model: "test-model",
+      durationSeconds: 6,
+      promptText: "  claymation zoom on the laughing vendor  ",
+    });
+
+    // The persisted creative direction reaches the provider trimmed; the
+    // image and motion fields are unchanged.
+    expect(wireBody.promptText).toBe("claymation zoom on the laughing vendor");
+    expect(wireBody.promptImage).toMatch(/^data:image\/png;base64,/);
+    expect(wireBody.ratio).toBe("720:1280");
+  });
+
+  it("omits promptText from the creation body when the job has none", async () => {
+    let wireBody: Record<string, unknown> = {};
+    const fetchImpl = stubFetch((_url, init) => {
+      wireBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return jsonResponse(200, { id: "task-prompt-2" });
+    });
+    const transport = createHttpRunwayTransport({
+      ...credentials,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await transport.createAnimationTask({
+      imageBytes: new Uint8Array([1]),
+      imageMimeType: "image/png",
+      model: "test-model",
+      durationSeconds: 6,
+    });
+
+    // Image-only generation, byte-identical in shape to the pre-promptText
+    // wire contract.
+    expect("promptText" in wireBody).toBe(false);
+  });
+
   it("rejects a creation response without a task id", async () => {
     const fetchImpl = stubFetch(() => jsonResponse(200, { estimatedCost: {} }));
     const transport = createHttpRunwayTransport({

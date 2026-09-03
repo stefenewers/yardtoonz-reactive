@@ -300,6 +300,9 @@ export function createRunwayAnimationStageExecutor(
         imageMimeType: "image/png",
         model: config.model,
         durationSeconds: context.segment.durationMs / 1000,
+        // The production's persisted creative direction steers the
+        // generation; omitted when the job carries none.
+        promptText: context.creativeDirection?.trim() || undefined,
       });
     } catch (error) {
       if (error instanceof RunwayAnimationError) throw error;

@@ -10,12 +10,18 @@ import {
   type StageExecutorContext,
   type StageUpstreamArtifact,
 } from "@/server/productions/pipeline";
+import { createOpenAIImageStyleStageExecutor } from "@/server/productions/openai-stage";
 import {
   createRunwayAnimationStageExecutor,
   resolveRunwayStageConfig,
 } from "@/server/productions/runway-stage";
 import { createHttpRunwayTransport, RunwayAnimationError } from "@/lib/runway";
-import type { AnimationProvider } from "@/lib/providers";
+import {
+  OpenAIImageAdapterError,
+  createOpenAIImageStyleProvider,
+  resolveOpenAIImageAdapterConfig,
+} from "@/lib/openai-image-adapter";
+import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import { parseServerEnvironment } from "@/lib/env-schema";
 import {
   createProductionWorkerRepository,
@@ -55,6 +61,18 @@ function describeFailure(error: unknown): StageFailure {
       errorDetail: error.message,
     };
   }
+  if (error instanceof OpenAIImageAdapterError) {
+    return {
+      // An unresolved request means the remote outcome is unknown; every
+      // other adapter failure is a proven rejection or misconfiguration.
+      errorCode:
+        error.code === "PROVIDER_REQUEST_UNRESOLVED"
+          ? "PROVIDER_UNKNOWN_OUTCOME"
+          : "PROVIDER_REQUEST_FAILED",
+      safeErrorMessage: "A media processing step failed for this stage.",
+      errorDetail: error.message,
+    };
+  }
   if (error instanceof RunwayAnimationError) {
     return {
       errorCode: error.code,
@@ -70,25 +88,52 @@ function describeFailure(error: unknown): StageFailure {
   };
 }
 
+/** Lazy factories for live-provider executors; keyed by provider. */
+export interface ProviderExecutorFactories {
+  createOpenAIImageExecutor?: () => StageExecutor;
+  createRunwayAnimationExecutor?: () => StageExecutor;
+}
+
+/** The production's persisted provider selections. */
+export interface JobProviderSelection {
+  readonly imageProvider: ImageProvider;
+  readonly animationProvider: AnimationProvider;
+}
+
 /**
- * Provider-aware executor selection: the production's persisted animation
- * selection decides which ANIMATE_IMAGE executor runs, so environment
- * changes after job creation cannot rewrite a job's provider behavior.
+ * Provider-aware executor selection: the production's PERSISTED provider
+ * selections decide which STYLE_IMAGE and ANIMATE_IMAGE executors run, so
+ * environment changes after job creation cannot rewrite a job's provider
+ * behavior. Factories return executors lazily — configuration resolution and
+ * any failure happen inside the executor body, so a selected live provider
+ * without credentials fails its stage cleanly instead of crashing the tick.
  */
 export function selectDefaultStageExecutor(
   stageName: PipelineStageName,
-  animationProvider: AnimationProvider,
+  selection: JobProviderSelection,
   defaults: Record<PipelineStageName, StageExecutor>,
-  createRunwayAnimationExecutor?: () => StageExecutor,
+  factories: ProviderExecutorFactories = {},
 ): StageExecutor {
-  if (stageName === "ANIMATE_IMAGE" && animationProvider === "RUNWAY") {
-    if (!createRunwayAnimationExecutor) {
+  if (stageName === "STYLE_IMAGE" && selection.imageProvider === "OPENAI") {
+    if (!factories.createOpenAIImageExecutor) {
       throw new WorkerStageError(
         "PROVIDER_REQUEST_FAILED",
-        "RUNWAY animation is selected but no animation executor is configured.",
+        "imageProvider=OPENAI is selected but no image style executor is configured.",
       );
     }
-    return createRunwayAnimationExecutor();
+    return factories.createOpenAIImageExecutor();
+  }
+  if (
+    stageName === "ANIMATE_IMAGE" &&
+    selection.animationProvider === "RUNWAY"
+  ) {
+    if (!factories.createRunwayAnimationExecutor) {
+      throw new WorkerStageError(
+        "PROVIDER_REQUEST_FAILED",
+        "animationProvider=RUNWAY is selected but no animation executor is configured.",
+      );
+    }
+    return factories.createRunwayAnimationExecutor();
   }
   return defaults[stageName];
 }
@@ -107,21 +152,43 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
   const defaults = createDefaultStageExecutors();
   const leaseMs = input.options.leaseMs ?? defaultStageLeaseMs;
 
-  // Built lazily: only a production persisted with animationProvider=RUNWAY
-  // constructs the live transport, so mock/mock stays credential-free.
+  // Built lazily: only productions persisted with a live provider construct
+  // the live executors, so mock/mock stays credential-free. Configuration is
+  // resolved inside the executor body — a selected live provider without
+  // credentials fails its stage (PROVIDER_REQUEST_FAILED) instead of
+  // crashing the tick with a leased stage stuck until expiry.
+  let openAIImageExecutor: StageExecutor | undefined;
+  const getOpenAIImageExecutor = (): StageExecutor =>
+    (openAIImageExecutor ??= async (context) => {
+      const selection = resolveOpenAIImageAdapterConfig(
+        parseServerEnvironment(process.env),
+        "OPENAI",
+      );
+      if (!selection.selected) {
+        throw new WorkerStageError(
+          "PROVIDER_REQUEST_FAILED",
+          "imageProvider=OPENAI is selected but the environment does not enable the OPENAI image provider.",
+        );
+      }
+      return createOpenAIImageStyleStageExecutor({
+        provider: createOpenAIImageStyleProvider(selection.config),
+        config: selection.config,
+      })(context);
+    });
+
   let runwayAnimationExecutor: StageExecutor | undefined;
-  const getRunwayAnimationExecutor = (): StageExecutor => {
+  const getRunwayAnimationExecutor = (): StageExecutor =>
     // resolveRunwayStageConfig fails fast when RUNWAY is selected without
     // valid credentials, so the transport only ever sees validated secrets.
-    const runwayConfig = resolveRunwayStageConfig(
-      parseServerEnvironment(process.env),
-    );
-    runwayAnimationExecutor ??= createRunwayAnimationStageExecutor({
-      transport: createHttpRunwayTransport(runwayConfig),
-      config: runwayConfig,
+    (runwayAnimationExecutor ??= async (context) => {
+      const runwayConfig = resolveRunwayStageConfig(
+        parseServerEnvironment(process.env),
+      );
+      return createRunwayAnimationStageExecutor({
+        transport: createHttpRunwayTransport(runwayConfig),
+        config: runwayConfig,
+      })(context);
     });
-    return runwayAnimationExecutor;
-  };
 
   for (const productionId of repository.listActiveProductionIds()) {
     const state = repository.loadPipelineState(productionId);
@@ -215,9 +282,15 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
       input.options.executors?.[stage.name] ??
       selectDefaultStageExecutor(
         stage.name,
-        state.production.animationProvider,
+        {
+          imageProvider: state.production.imageProvider,
+          animationProvider: state.production.animationProvider,
+        },
         defaults,
-        getRunwayAnimationExecutor,
+        {
+          createOpenAIImageExecutor: getOpenAIImageExecutor,
+          createRunwayAnimationExecutor: getRunwayAnimationExecutor,
+        },
       );
 
     try {
@@ -320,6 +393,7 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
       },
       upstream,
       store: input.store,
+      creativeDirection: state.production.creativeDirection,
       priorProviderRequestId: findPriorProviderRequestId(state, stage),
       recordProviderRequestId: async (requestId) =>
         repository.recordStageProviderRequestId({
