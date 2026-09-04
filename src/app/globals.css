@@ -2032,3 +2032,158 @@ input:focus-visible {
   background: var(--success);
   color: var(--accent-dark);
 }
+/* Provider diagnostics (/diagnostics) */
+
+.visually-hidden-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.diagnostics-refresh {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.diagnostics-note,
+.diagnostics-muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.diagnostics-warning {
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.diagnostics-gate-grid,
+.diagnostics-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 2rem;
+}
+
+.diagnostics-gate,
+.diagnostics-card,
+.diagnostics-timeline {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface-raised);
+}
+
+.diagnostics-gate .eyebrow,
+.diagnostics-card .eyebrow {
+  margin: 0 0 0.35rem;
+}
+
+.diagnostics-gate-provider,
+.diagnostics-card-status {
+  margin: 0 0 0.5rem;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.diagnostics-outcome {
+  display: inline-block;
+  margin: 0 0 0.6rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.diagnostics-outcome--free {
+  color: var(--text-muted);
+}
+
+.diagnostics-outcome--ready {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.diagnostics-outcome--blocked {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.diagnostics-setting-list {
+  margin: 0.5rem 0 0;
+}
+
+.diagnostics-setting--present {
+  color: var(--success);
+}
+
+.diagnostics-setting--missing {
+  color: var(--danger);
+}
+
+.diagnostics-audit-table {
+  width: 100%;
+  margin: 1rem 0 2rem;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.diagnostics-audit-table th,
+.diagnostics-audit-table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.diagnostics-audit-table th {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diagnostics-verdict {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.diagnostics-verdict--attributed {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.diagnostics-verdict--local {
+  color: var(--text-muted);
+}
+
+.diagnostics-verdict--missing {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.diagnostics-timeline summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.diagnostics-timeline ol {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+
+@media (max-width: 700px) {
+  .diagnostics-audit-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
