@@ -229,8 +229,30 @@ export function createProductionRepository(database: Database) {
     };
   }
 
+  /**
+   * Read-only diagnostics view of every production, newest first, with its
+   * stages (pipeline order) and artifacts (creation order). Cheap snapshot —
+   * no output decisions, bytes, or secret material.
+   */
+  function listAll(): ProductionDetailResponse[] {
+    return database
+      .select()
+      .from(productions)
+      .orderBy(desc(productions.createdAt))
+      .all()
+      .map((row) => {
+        const detail = getDetail(row.id);
+        if (detail) return detail;
+
+        // A production row always carries its immutable stage set, so an
+        // unreadable detail is a schema drift bug — fail closed, loudly.
+        throw new Error(`Production ${row.id} failed diagnostics validation`);
+      });
+  }
+
   return {
     getDetail,
+    listAll,
 
     /** Resolves one artifact row for safe byte serving; undefined when absent. */
     getArtifact(

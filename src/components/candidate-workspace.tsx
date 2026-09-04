@@ -242,6 +242,13 @@ export function CandidateWorkspace({
             <i aria-hidden="true" />
             {healthTone.label}
           </span>
+          <a
+            className="mode-pill"
+            href="/diagnostics"
+            title="Provider diagnostics: credential readiness, attribution audit, request-ID timelines"
+          >
+            Diagnostics
+          </a>
           <ScoutHeaderAction onImported={() => loadCandidates()} />
         </div>
       </header>
