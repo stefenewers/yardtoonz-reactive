@@ -11,7 +11,10 @@ test("candidate moves from inbox through approval and rights gate to upload", as
   await expect(page.getByText("Image provider")).toBeVisible();
   await expect(page.getByText("Animation provider")).toBeVisible();
   await expect(page.getByText("MOCK", { exact: true })).toHaveCount(2);
-  await expect(page.getByText("Mock mode")).toBeVisible();
+  // exact: true — the demo-hint paragraph ("…refused outside local MOCK
+  // mode.") also case-insensitively matches a bare substring lookup when the
+  // workspace renders on "/" (strict-mode violation in CI, PR #40).
+  await expect(page.getByText("Mock mode", { exact: true })).toBeVisible();
   await expect(page.getByText("Image · Mock")).toBeVisible();
   await expect(page.getByText("Animation · Mock")).toBeVisible();
   await expect(page.getByText("System ready")).toBeVisible();
