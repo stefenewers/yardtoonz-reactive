@@ -68,14 +68,10 @@ describe("AnalystPanel", () => {
   it("renders the loaded analysis with plain-language evidence", async () => {
     const analysis = makeAnalysis();
     mountWithFetch(() => okJson({ analysis }));
-
-    await waitFor(() =>
-      expect(screen.getByText("Humor analyst")).toBeDefined(),
-    );
-
-    expect(
-      screen.getByText(/of 10 comments carried laughter markers/),
-    ).toBeDefined();
+    // The "Humor analyst" heading renders during the loading state too, so
+    // waiting on it raced the fetch behind the assertions (CI failure on
+    // PR #40). Wait for loaded-state content instead.
+    await screen.findByText(/of 10 comments carried laughter markers/);
     expect(
       screen.getByText(analysis.analysis.summary.summaryExplanation),
     ).toBeDefined();
@@ -99,11 +95,10 @@ describe("AnalystPanel", () => {
     };
     mountWithFetch(() => okJson({ analysis }));
 
-    await waitFor(() =>
-      expect(screen.getByText("Humor analyst")).toBeDefined(),
-    );
-
-    expect(screen.getByText("Evidence gaps")).toBeDefined();
+    // The "Humor analyst" heading renders during the loading state too, so
+    // waiting on it raced the fetch behind the assertions (CI failure on
+    // PR #40). Wait for loaded-state content instead.
+    await screen.findByText("Evidence gaps");
     expect(
       screen.getByText(
         "No comment excerpts were supplied, so there is no corpus to analyze.",
