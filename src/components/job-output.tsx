@@ -16,6 +16,7 @@ import {
   type LineageRow,
   type StageTimelineRow,
 } from "@/domain/job-output";
+import { lineageExplorerUrl } from "@/domain/lineage-explorer";
 import { createApiProductionClient } from "@/lib/production-client";
 import type { ProductionDetailResponse } from "@/shared/productions";
 import { AgentTraceMonitor } from "@/components/agent-trace-monitor";
@@ -403,7 +404,16 @@ export function JobOutput({
         headingId="job-agent-center-title"
       />
 
-      <h2>Artifact lineage</h2>
+      <div className="lineage-heading">
+        <h2>Artifact lineage</h2>
+        <a
+          className="secondary-button"
+          href={lineageExplorerUrl(production.id)}
+          data-testid="lineage-explorer-link"
+        >
+          Open lineage explorer
+        </a>
+      </div>
       {lineage.length === 0 ? (
         <p className="empty-state" role="status">
           Artifacts appear here as stages complete, from the source clip to the
@@ -426,7 +436,10 @@ export function JobOutput({
               <small>
                 {artifact.providerLabel} · {artifact.sizeLabel} ·{" "}
                 {formatClockTime(artifact.createdAt)} · sha256{" "}
-                {artifact.sha256Prefix}…
+                {artifact.sha256Prefix}… ·{" "}
+                <a href={lineageExplorerUrl(production.id, artifact.id)}>
+                  Details
+                </a>
               </small>
             </li>
           ))}
