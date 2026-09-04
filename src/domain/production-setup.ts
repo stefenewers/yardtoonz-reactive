@@ -112,10 +112,64 @@ export interface SourceVideoFacts {
   height?: number;
 }
 
+/** Treatment facts that seed the setup form; every scalar is bounded. */
+export interface TreatmentSetupFacts {
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+  readonly setupTimestamp: number;
+  readonly payoffTimestamp: number;
+  readonly adaptationConcept: string;
+}
+
+export interface TreatmentSetupPrefill {
+  readonly startInput: string;
+  readonly endInput: string;
+  readonly creativeDirection: string;
+}
+
+/**
+ * Numeric input strings for the segment fields and the editable creative
+ * direction, seeded from the Director treatment. The operator can still
+ * change every field; this only fills the form.
+ */
+export function treatmentSetupPrefill(
+  facts: TreatmentSetupFacts,
+): TreatmentSetupPrefill {
+  return {
+    startInput: `${facts.startSeconds}`,
+    endInput: `${facts.endSeconds}`,
+    creativeDirection: facts.adaptationConcept,
+  };
+}
+
+export interface SegmentMarkerPercents {
+  readonly setupPercent: number;
+  readonly payoffPercent: number;
+}
+
+/**
+ * Marker positions as percentages across the selected segment span, for
+ * the visible setup/payoff strip. Values outside the segment clamp to its
+ * edges instead of rendering off the track.
+ */
+export function segmentMarkerPercents(
+  facts: Omit<TreatmentSetupFacts, "adaptationConcept">,
+): SegmentMarkerPercents {
+  const span = facts.endSeconds - facts.startSeconds;
+  if (!(span > 0)) return { setupPercent: 0, payoffPercent: 0 };
+  const percentOf = (timestamp: number): number =>
+    Math.min(100, Math.max(0, ((timestamp - facts.startSeconds) / span) * 100));
+  return {
+    setupPercent: percentOf(facts.setupTimestamp),
+    payoffPercent: percentOf(facts.payoffTimestamp),
+  };
+}
+
 /**
  * Reads the probed source facts out of the uploaded artifact's metadata.
  * Unknown or mistyped entries stay undefined instead of guessing.
  */
+
 export function sourceFactsFromMetadata(
   metadata: Record<string, string | number | boolean | null> | undefined,
 ): SourceVideoFacts {

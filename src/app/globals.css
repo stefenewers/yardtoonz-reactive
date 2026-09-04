@@ -1321,6 +1321,42 @@ input:focus-visible {
   font-size: 0.85rem;
 }
 
+.segment-markers {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.segment-marker-track {
+  position: relative;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: rgb(7 6 5 / 25%);
+  border: 1px solid var(--line);
+}
+
+.segment-marker {
+  position: absolute;
+  top: -0.3rem;
+  width: 0.35rem;
+  height: 1.25rem;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+.segment-marker--setup {
+  background: var(--accent, #f4a915);
+}
+
+.segment-marker--payoff {
+  background: var(--positive, #35c46a);
+}
+
+.segment-marker-note {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 .direction-field {
   display: grid;
   gap: 0.4rem;

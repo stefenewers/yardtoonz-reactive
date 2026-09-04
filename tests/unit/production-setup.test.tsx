@@ -495,4 +495,104 @@ describe("ProductionSetup", () => {
       screen.queryByRole("heading", { name: "Production queued" }),
     ).toBeNull();
   });
+
+  it("prefills the segment, creative direction, and markers from the Director treatment", async () => {
+    installFetch(async (url, init) => {
+      if (url.startsWith("/api/director/treatments")) {
+        return jsonResponse(200, { treatment: makeTreatmentResource() });
+      }
+      if (url === "/api/productions" && init?.method === "POST") {
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
+      }
+      if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
+        return jsonResponse(200, makeDetail({}));
+      }
+      throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+    });
+
+    render(<ProductionSetup {...defaultProps()} />);
+
+    const startInput = await screen.findByLabelText("Start (seconds)");
+    await waitFor(() => {
+      expect((startInput as HTMLInputElement).value).toBe("1.5");
+    });
+    expect(
+      (screen.getByLabelText("End (seconds)") as HTMLInputElement).value,
+    ).toBe("7.5");
+    expect(
+      (
+        screen.getByLabelText(
+          "Creative direction (optional)",
+        ) as HTMLTextAreaElement
+      ).value,
+    ).toBe("Lean into the deadpan reaction.");
+
+    expect(
+      screen.getByRole("img", {
+        name: /setup at 2\.5 seconds, payoff at 7\.0 seconds/,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/prefilled from the Director treatment/),
+    ).toBeTruthy();
+  });
+
+  it("leaves the default form untouched when the candidate has no treatment", async () => {
+    installFetch(async (url, init) => {
+      if (url.startsWith("/api/director/treatments")) {
+        return jsonResponse(404, {
+          error: { code: "TREATMENT_NOT_FOUND", message: "None." },
+        });
+      }
+      if (url === "/api/productions" && init?.method === "POST") {
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
+      }
+      if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
+        return jsonResponse(200, makeDetail({}));
+      }
+      throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+    });
+
+    render(<ProductionSetup {...defaultProps()} />);
+
+    await screen.findByText("Linked to the persisted candidate confirmation.");
+    const startInput = screen.getByLabelText("Start (seconds)");
+    await waitFor(() => {
+      expect((startInput as HTMLInputElement).value).toBe("0");
+    });
+    expect(screen.queryByRole("img", { name: /setup at/ })).toBeNull();
+  });
 });
+
+function makeTreatmentResource(): Record<string, unknown> {
+  return {
+    id: "treat-e51",
+    candidateId: "cand-e51",
+    provider: "MOCK",
+    model: null,
+    providerRequestId: null,
+    createdAt: ISO,
+    treatment: {
+      humorMechanism: "Expectation subversion in a mundane setting.",
+      audienceReactionEvidence: [
+        { source: "comment", quote: "This got me good.", weight: 0.8 },
+      ],
+      recommendedSegment: { startSeconds: 1.5, endSeconds: 7.5 },
+      setupTimestamp: 2.5,
+      payoffTimestamp: 7,
+      adaptationConcept: "Lean into the deadpan reaction.",
+      claymationPrompt: "Claymation style, hand-built look.",
+      motionPrompt: "Slow push-in on the payoff.",
+      socialCaption: "Wait for it. #yardtoonz",
+      confidence: 0.8,
+      risks: [],
+      evidenceGaps: [],
+    },
+  };
+}
