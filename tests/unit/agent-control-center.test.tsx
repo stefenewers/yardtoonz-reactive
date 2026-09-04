@@ -56,6 +56,32 @@ const SCOUT_RUN = makeRun({
   },
 });
 
+const MEDIA_EVIDENCE = {
+  provider: "MOCK",
+  fingerprint: "fp-1",
+  validationReport: null,
+} as const;
+
+const CLAY_RUN = makeRun({
+  agentKey: "clay-artist",
+  candidateId: undefined,
+  productionId: "prod-1",
+  provider: "MOCK",
+  model: "mock-style-v1",
+  elapsedMs: 800,
+  inputEvidence: MEDIA_EVIDENCE,
+});
+
+const ANIMATOR_RUN = makeRun({
+  agentKey: "animator",
+  candidateId: undefined,
+  productionId: "prod-1",
+  provider: "MOCK",
+  model: "mock-zoompan-v1",
+  elapsedMs: 900,
+  inputEvidence: MEDIA_EVIDENCE,
+});
+
 const DIRECTOR_RUN = makeRun({
   agentKey: "yardtoonz-director",
   decision: "Rain-soaked laundry becomes a clay dance-off.",
@@ -492,6 +518,56 @@ describe("AgentTraceMonitor", () => {
     expect(screen.getByLabelText("Clay Artist: Waiting")).toBeTruthy();
     expect(screen.getByLabelText("QA Inspector: Waiting")).toBeTruthy();
     expect(screen.queryByLabelText("Trend Scout: Waiting")).toBeNull();
+  });
+
+  it("fetches once more when the job turns terminal so the cards land complete", async () => {
+    vi.useFakeTimers();
+    try {
+      let call = 0;
+      const fetchMock = installFetch(async () => {
+        call += 1;
+        return jsonResponse(
+          200,
+          call === 1
+            ? { runs: [CLAY_RUN] }
+            : { runs: [CLAY_RUN, ANIMATOR_RUN] },
+        );
+      });
+
+      const view = render(
+        <AgentTraceMonitor
+          productionId="prod-1"
+          productionStatus="ANIMATING"
+          activeStage="ANIMATE_IMAGE"
+        />,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByLabelText("Animator: Running")).toBeTruthy();
+
+      // The status flips to COMPLETE: the monitor re-arms and fetches the
+      // terminal truth once, instead of freezing on the last mid-run poll.
+      await act(async () => {
+        view.rerender(
+          <AgentTraceMonitor
+            productionId="prod-1"
+            productionStatus="COMPLETE"
+          />,
+        );
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByLabelText("Clay Artist: Complete")).toBeTruthy();
+      expect(screen.getByLabelText("Animator: Complete")).toBeTruthy();
+
+      // And then it rests: no further polls once the job is terminal.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000 * 2 + 100);
+      });
+      expect(fetchMock.mock.calls.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("surfaces load failures and recovers through Try again", async () => {

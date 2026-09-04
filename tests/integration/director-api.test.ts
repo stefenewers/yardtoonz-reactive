@@ -83,6 +83,39 @@ describe("director treatment API flow", () => {
     expect(Array.isArray(body.treatment.treatment.evidenceGaps)).toBe(true);
   });
 
+  it("records the treatment's provider and model on the Director trace row", async () => {
+    const { POST } = await import(
+      "../../src/app/api/director/treatments/route"
+    );
+    const candidateId = candidateFixtures[1]!.id;
+    const response = await POST(
+      jsonRequest({ candidateId }, "POST", treatmentsUrl),
+    );
+    expect(response.status).toBe(200);
+
+    // The Control Center renders provider/model attribution from the
+    // trace row, so the row must carry what actually produced the
+    // treatment — not a blank slate behind a live resource.
+    const { createDatabaseProvider } = await import(
+      "../../src/server/db/client"
+    );
+    const { listAgentRunsByCandidate } = await import(
+      "../../src/server/agents/trace"
+    );
+    const reader = createDatabaseProvider(process.env.DATABASE_URL!);
+    const runs = listAgentRunsByCandidate(
+      reader.getConnection().database,
+      candidateId,
+    );
+    const directorRun = runs.find(
+      (run) => run.agentKey === "yardtoonz-director",
+    );
+    expect(directorRun).toBeTruthy();
+    expect(directorRun!.provider).toBe("MOCK");
+    expect(directorRun!.model).toBe("mock-deterministic-v1");
+    expect(directorRun!.state).toBe("COMPLETE");
+  });
+
   it("returns the same persisted treatment on a repeated create", async () => {
     const { POST } = await import(
       "../../src/app/api/director/treatments/route"
