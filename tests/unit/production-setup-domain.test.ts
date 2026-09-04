@@ -5,9 +5,11 @@ import {
   evaluateSourceFile,
   maxSegmentSeconds,
   minSegmentSeconds,
+  segmentMarkerPercents,
   segmentProblemMessages,
   sourceFactsFromMetadata,
   sourceProblemMessages,
+  treatmentSetupPrefill,
 } from "../../src/domain/production-setup";
 
 describe("evaluateSegmentDraft", () => {
@@ -177,5 +179,58 @@ describe("sourceFactsFromMetadata", () => {
       }),
     ).toEqual({ width: 1080 });
     expect(sourceFactsFromMetadata(undefined)).toEqual({});
+  });
+});
+
+describe("treatmentSetupPrefill", () => {
+  it("seeds the segment inputs and creative direction from the treatment", () => {
+    expect(
+      treatmentSetupPrefill({
+        startSeconds: 1.5,
+        endSeconds: 7.5,
+        setupTimestamp: 2.5,
+        payoffTimestamp: 7,
+        adaptationConcept: "Lean into the deadpan reaction.",
+      }),
+    ).toEqual({
+      startInput: "1.5",
+      endInput: "7.5",
+      creativeDirection: "Lean into the deadpan reaction.",
+    });
+  });
+});
+
+describe("segmentMarkerPercents", () => {
+  it("positions markers proportionally across the segment span", () => {
+    expect(
+      segmentMarkerPercents({
+        startSeconds: 1,
+        endSeconds: 5,
+        setupTimestamp: 2,
+        payoffTimestamp: 5,
+      }),
+    ).toEqual({ setupPercent: 25, payoffPercent: 100 });
+  });
+
+  it("clamps markers that fall outside the segment onto its edges", () => {
+    expect(
+      segmentMarkerPercents({
+        startSeconds: 2,
+        endSeconds: 8,
+        setupTimestamp: 0.5,
+        payoffTimestamp: 30,
+      }),
+    ).toEqual({ setupPercent: 0, payoffPercent: 100 });
+  });
+
+  it("returns zero positions instead of dividing by a zero-width span", () => {
+    expect(
+      segmentMarkerPercents({
+        startSeconds: 3,
+        endSeconds: 3,
+        setupTimestamp: 2,
+        payoffTimestamp: 4,
+      }),
+    ).toEqual({ setupPercent: 0, payoffPercent: 0 });
   });
 });

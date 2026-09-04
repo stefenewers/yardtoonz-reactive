@@ -2,15 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
+import {
+  type DirectorTreatment,
+  type DirectorTreatmentResource,
+} from "@/domain/director";
 import { humanizeProvider } from "@/domain/inbox";
 import type { SegmentSelection } from "@/domain/production";
 import {
   evaluateSegmentDraft,
   evaluateSourceFile,
   rightsConfirmationTextVersion,
+  segmentMarkerPercents,
   segmentProblemMessages,
   sourceFactsFromMetadata,
   sourceProblemMessages,
+  treatmentSetupPrefill,
   type SourceVideoFacts,
 } from "@/domain/production-setup";
 import { JobOutput } from "@/components/job-output";
@@ -73,6 +79,7 @@ export function ProductionSetup({
   const [startInput, setStartInput] = useState("0");
   const [endInput, setEndInput] = useState("6");
   const [creativeDirection, setCreativeDirection] = useState("");
+  const [treatment, setTreatment] = useState<DirectorTreatmentResource>();
   const [starting, setStarting] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
@@ -80,6 +87,35 @@ export function ProductionSetup({
   // second DRAFT production for the candidate.
   const initializeRef = useRef(false);
   const [retryToken, setRetryToken] = useState(0);
+
+  // Treatment prefill is an enhancement, never a gate: a missing or failed
+  // lookup leaves the default form untouched so setup works unchanged.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTreatment() {
+      try {
+        const resource = await client.fetchDirectorTreatment(candidateId);
+        if (cancelled || !resource) return;
+        const prefill = treatmentSetupPrefill({
+          startSeconds: resource.treatment.recommendedSegment.startSeconds,
+          endSeconds: resource.treatment.recommendedSegment.endSeconds,
+          setupTimestamp: resource.treatment.setupTimestamp,
+          payoffTimestamp: resource.treatment.payoffTimestamp,
+          adaptationConcept: resource.treatment.adaptationConcept,
+        });
+        setTreatment(resource);
+        setStartInput(prefill.startInput);
+        setEndInput(prefill.endInput);
+        setCreativeDirection(prefill.creativeDirection);
+      } catch {
+        // Absence of a treatment is a normal state for this candidate.
+      }
+    }
+    void loadTreatment();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, candidateId]);
 
   useEffect(() => {
     if (initializeRef.current) return;
@@ -407,6 +443,9 @@ export function ProductionSetup({
                   onChange={(event) => setEndInput(event.target.value)}
                 />
               </label>
+              {treatment && (
+                <TreatmentMarkerStrip treatment={treatment.treatment} />
+              )}
             </fieldset>
             <p className="segment-feedback" aria-live="polite">
               {segmentEvaluation.valid
@@ -505,5 +544,41 @@ export function ProductionSetup({
         )}
       </aside>
     </section>
+  );
+}
+
+/**
+ * Visible setup/payoff markers across the treatment's recommended segment.
+ * Pure presentation over the bounded treatment scalars.
+ */
+function TreatmentMarkerStrip({ treatment }: { treatment: DirectorTreatment }) {
+  const markers = segmentMarkerPercents({
+    startSeconds: treatment.recommendedSegment.startSeconds,
+    endSeconds: treatment.recommendedSegment.endSeconds,
+    setupTimestamp: treatment.setupTimestamp,
+    payoffTimestamp: treatment.payoffTimestamp,
+  });
+  return (
+    <div className="segment-markers">
+      <div
+        className="segment-marker-track"
+        role="img"
+        aria-label={`Setup and payoff markers across the selected segment, setup at ${treatment.setupTimestamp.toFixed(1)} seconds, payoff at ${treatment.payoffTimestamp.toFixed(1)} seconds`}
+      >
+        <span
+          className="segment-marker segment-marker--setup"
+          style={{ left: `${markers.setupPercent}%` }}
+        />
+        <span
+          className="segment-marker segment-marker--payoff"
+          style={{ left: `${markers.payoffPercent}%` }}
+        />
+      </div>
+      <p className="segment-marker-note">
+        Setup at {formatSeconds(treatment.setupTimestamp)}, payoff at{" "}
+        {formatSeconds(treatment.payoffTimestamp)} — prefilled from the Director
+        treatment. Edit freely.
+      </p>
+    </div>
   );
 }

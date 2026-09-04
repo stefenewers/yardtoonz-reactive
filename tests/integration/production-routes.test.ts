@@ -315,6 +315,85 @@ describe("production API flow", () => {
     expect(detailBody.production.status).toBe("QUEUED");
   });
 
+  it("rejects paid-output retries without an explicit human approval", async () => {
+    // A dedicated candidate keeps this test independent from the earlier
+    // queued production. The approval gate fires before any state check,
+    // so a draft production is enough to prove the API contract.
+    const { getCandidateRepository } = await import(
+      "../../src/server/candidates/service"
+    );
+    const candidates = getCandidateRepository();
+    const retryCandidateId = candidateFixtures[2]!.id;
+    candidates.approve(retryCandidateId, "2026-09-03T12:07:00.000Z");
+    candidates.confirmRights({
+      candidateId: retryCandidateId,
+      confirmedAt: "2026-09-03T12:08:00.000Z",
+      confirmationTextVersion: "rights-v1",
+    });
+
+    const { POST: createProduction } = await import(
+      "../../src/app/api/productions/route"
+    );
+    const created = await createProduction(
+      jsonRequest(
+        { candidateId: retryCandidateId, segment },
+        "POST",
+        productionsUrl,
+      ),
+    );
+    expect(created.status).toBe(201);
+    const { id } = (
+      (await created.json()) as {
+        production: { id: string };
+      }
+    ).production;
+    const routeContext = { params: Promise.resolve({ id }) };
+
+    const { POST: retryProduction } = await import(
+      "../../src/app/api/productions/[id]/retry/route"
+    );
+
+    // No body at all — the API gate refuses before any state check.
+    const missingApproval = await retryProduction(
+      new Request(`${productionsUrl}/${id}/retry`, { method: "POST" }),
+      routeContext,
+    );
+    expect(await errorOf(missingApproval)).toEqual({
+      code: "RETRY_APPROVAL_REQUIRED",
+      status: 409,
+    });
+
+    // A declined approval is not an approval.
+    const declined = await retryProduction(
+      jsonRequest(
+        { approval: { confirmed: false } },
+        "POST",
+        `${productionsUrl}/${id}/retry`,
+      ),
+      routeContext,
+    );
+    expect(await errorOf(declined)).toEqual({
+      code: "RETRY_APPROVAL_REQUIRED",
+      status: 409,
+    });
+
+    // An explicit approval passes the gate; the domain then refuses to
+    // retry a production that has not failed, proving the request
+    // reached the state machine instead of being dropped.
+    const confirmed = await retryProduction(
+      jsonRequest(
+        { approval: { confirmed: true } },
+        "POST",
+        `${productionsUrl}/${id}/retry`,
+      ),
+      routeContext,
+    );
+    expect(await errorOf(confirmed)).toEqual({
+      code: "ILLEGAL_TRANSITION",
+      status: 409,
+    });
+  });
+
   it("keeps a second job from starting while one is active", async () => {
     // A dedicated candidate keeps this test independent from the earlier
     // queued production, which still occupies its own candidate's job slot.

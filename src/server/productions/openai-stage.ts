@@ -13,8 +13,9 @@ import {
 
 /**
  * OpenAI-backed STYLE_IMAGE stage: the persisted keyframe is submitted as one
- * image edit whose prompt is the production's persisted creative direction
- * (or the documented deterministic default). The adapter owns retry safety —
+ * image edit whose prompt is the persisted treatment's claymation prompt,
+ * else the production's persisted creative direction, else the documented
+ * deterministic default. The adapter owns retry safety —
  * one live call per input fingerprint, UNCERTAIN poisoning when a request's
  * remote outcome is unknown — so this executor only translates the adapter
  * outcome into the stage artifact contract:
@@ -47,7 +48,13 @@ export function createOpenAIImageStyleStageExecutor(
   ): Promise<StageExecutionResult> => {
     const keyframe = requireUpstream(context, "KEYFRAME");
     const keyframePath = await context.store.resolve(keyframe.storageKey);
-    const prompt = context.creativeDirection?.trim() || defaultImageStylePrompt;
+    // The treatment's claymation prompt is the actual clay instruction;
+    // the operator's creative direction and the documented default are the
+    // fallbacks when the job carries no treatment.
+    const prompt =
+      context.claymationPrompt?.trim() ||
+      context.creativeDirection?.trim() ||
+      defaultImageStylePrompt;
 
     const styled = await options.provider.style({
       keyframePath,

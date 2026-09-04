@@ -1,3 +1,7 @@
+import {
+  directorTreatmentResponseSchema,
+  type DirectorTreatmentResource,
+} from "../domain/director";
 import type { SegmentSelection } from "../domain/production";
 import type { AnimationProvider, ImageProvider } from "./providers";
 import {
@@ -95,7 +99,10 @@ export interface ProductionApiClient {
   /** Authoritative job snapshot: production, stages, artifacts, decision. */
   getDetail(productionId: string): Promise<ProductionDetailResponse>;
   /** Re-arms a FAILED production; the response is the re-armed detail. */
-  retry(productionId: string): Promise<ProductionDetailResponse>;
+  retry(
+    productionId: string,
+    approval: { confirmed: true },
+  ): Promise<ProductionDetailResponse>;
   /** Persists the output decision; the response carries the fresh verdict. */
   recordDecision(
     productionId: string,
@@ -103,6 +110,13 @@ export interface ProductionApiClient {
   ): Promise<ProductionDetailResponse>;
   /** Lists a candidate's productions for revisit recovery. */
   listForCandidate(candidateId: string): Promise<ProductionDetailResponse[]>;
+  /**
+   * The candidate's persisted Director treatment for setup prefill, or null
+   * when none exists — absence is a normal state, not an error.
+   */
+  fetchDirectorTreatment(
+    candidateId: string,
+  ): Promise<DirectorTreatmentResource | null>;
   /** Safe URL for previewing or downloading one stored artifact. */
   artifactUrl(
     productionId: string,
@@ -165,9 +179,11 @@ export function createApiProductionClient(
     async getDetail(productionId) {
       return send(`/api/productions/${productionId}`, { method: "GET" });
     },
-    async retry(productionId) {
+    async retry(productionId, approval) {
       return send(`/api/productions/${productionId}/retry`, {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ approval }),
       });
     },
     async recordDecision(productionId, body) {
@@ -187,6 +203,20 @@ export function createApiProductionClient(
         listProductionsResponseSchema,
       );
       return payload.productions;
+    },
+    async fetchDirectorTreatment(treatmentCandidateId) {
+      const response = await request(
+        `/api/director/treatments?candidateId=${encodeURIComponent(
+          treatmentCandidateId,
+        )}`,
+        { method: "GET" },
+      );
+      if (response.status === 404) return null;
+      const payload = await parsePayload(
+        response,
+        directorTreatmentResponseSchema,
+      );
+      return payload.treatment;
     },
     artifactUrl(productionId, artifactId, download = false) {
       const suffix = download ? "?download=1" : "";

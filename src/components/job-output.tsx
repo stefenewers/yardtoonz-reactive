@@ -7,6 +7,7 @@ import { humanizeProvider } from "@/domain/inbox";
 import {
   buildArtifactLineage,
   buildStageTimeline,
+  buildVisualChain,
   formatClockTime,
   formatSeconds,
   isJobActive,
@@ -65,6 +66,7 @@ export function JobOutput({
   const [loadError, setLoadError] = useState<string>();
   const [refreshToken, setRefreshToken] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const [confirmingRetry, setConfirmingRetry] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState<"APPROVED" | "REJECTED">();
   const [actionError, setActionError] = useState<string>();
   const [rejectNoteOpen, setRejectNoteOpen] = useState(false);
@@ -126,6 +128,10 @@ export function JobOutput({
     () => buildArtifactLineage(detail?.artifacts ?? []),
     [detail?.artifacts],
   );
+  const visualChain = useMemo(
+    () => buildVisualChain(detail?.artifacts ?? []),
+    [detail?.artifacts],
+  );
 
   const finalArtifact = detail?.artifacts.find(
     (artifact) => artifact.kind === "FINAL_VIDEO",
@@ -152,7 +158,7 @@ export function JobOutput({
     setRetrying(true);
     setActionError(undefined);
     try {
-      setDetail(await client.retry(production.id));
+      setDetail(await client.retry(production.id, { confirmed: true }));
     } catch (retryError) {
       setActionError(
         retryError instanceof Error
@@ -294,11 +300,42 @@ export function JobOutput({
           <button
             type="button"
             className="primary-button"
-            onClick={() => void handleRetry()}
+            onClick={() => setConfirmingRetry(true)}
             disabled={retrying}
           >
             {retrying ? "Retrying…" : "Retry failed stage"}
           </button>
+          {confirmingRetry && (
+            <div
+              className="retry-approval"
+              role="group"
+              aria-label="Confirm retry of paid provider output"
+            >
+              <p>
+                Retrying re-runs the failed stage on its provider and may
+                regenerate paid output. Confirm to proceed.
+              </p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setConfirmingRetry(false);
+                  void handleRetry();
+                }}
+                disabled={retrying}
+              >
+                {retrying ? "Retrying…" : "Confirm paid retry"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setConfirmingRetry(false)}
+                disabled={retrying}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -391,6 +428,39 @@ export function JobOutput({
                 {formatClockTime(artifact.createdAt)} · sha256{" "}
                 {artifact.sha256Prefix}…
               </small>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <h2>Visual chain</h2>
+      {visualChain.length === 0 ? (
+        <p className="empty-state" role="status">
+          Keyframe, clay frame, and animation previews appear here as stages
+          complete.
+        </p>
+      ) : (
+        <ol
+          className="visual-chain"
+          aria-label="Keyframe, clay frame, animation, and final video"
+        >
+          {visualChain.map((step) => (
+            <li key={step.kind} className="visual-chain-step">
+              {step.isVideo ? (
+                <video
+                  src={client.artifactUrl(production.id, step.artifactId)}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  aria-label={step.label}
+                />
+              ) : (
+                <img
+                  src={client.artifactUrl(production.id, step.artifactId)}
+                  alt={step.label}
+                />
+              )}
+              <span>{step.label}</span>
             </li>
           ))}
         </ol>

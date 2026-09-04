@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import { JobOutput } from "../../src/components/job-output";
@@ -244,12 +245,28 @@ describe("JobOutput", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Retry failed stage" }));
 
+    // The first click must never call the API: paid regeneration waits
+    // for an explicit human confirmation.
+    expect(
+      findCall(fetchMock, "/api/productions/prod-e52/retry", "POST"),
+    ).toBeUndefined();
+
+    const confirmGroup = screen.getByRole("group", {
+      name: "Confirm retry of paid provider output",
+    });
+    fireEvent.click(
+      within(confirmGroup).getByRole("button", { name: "Confirm paid retry" }),
+    );
+
     const retryCall = findCall(
       fetchMock,
       "/api/productions/prod-e52/retry",
       "POST",
     );
     expect(retryCall).toBeDefined();
+    expect(JSON.parse(retryCall?.[1]?.body as string)).toEqual({
+      approval: { confirmed: true },
+    });
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
@@ -276,6 +293,7 @@ describe("JobOutput", () => {
 
     await screen.findByRole("heading", { name: "Job monitor" });
     fireEvent.click(screen.getByRole("button", { name: "Retry failed stage" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm paid retry" }));
 
     await screen.findByText(/Only failed productions can be retried\./);
     // The original safe failure stays visible while the action error shows.
@@ -480,6 +498,36 @@ describe("JobOutput", () => {
   });
 });
 
+function chainDetail() {
+  return makeDetail({
+    status: "COMPLETE",
+    detail: {
+      stages: STAGE_NAMES.map((name) =>
+        makeStage({ id: `stage-${name}`, name, status: "COMPLETE" }),
+      ),
+      artifacts: [
+        makeArtifact({ id: "prod-e52-source" }),
+        makeArtifact({
+          id: "prod-e52-key",
+          kind: "KEYFRAME",
+          provider: "MOCK",
+        }),
+        makeArtifact({
+          id: "prod-e52-clay",
+          kind: "STYLED_FRAME",
+          provider: "MOCK",
+        }),
+        makeArtifact({
+          id: "prod-e52-anim",
+          kind: "SILENT_ANIMATION",
+          provider: "MOCK",
+        }),
+        COMPLETE_FINAL_ARTIFACT,
+      ],
+    },
+  });
+}
+
 function failedDetail() {
   return makeDetail({
     status: "FAILED",
@@ -505,3 +553,28 @@ function failedDetail() {
     },
   });
 }
+
+describe("JobOutput visual chain", () => {
+  it("draws the visual chain from artifact lineage in pipeline order", async () => {
+    installFetch(async () => jsonResponse(200, chainDetail()));
+    renderMonitor();
+
+    const chain = await screen.findByLabelText(
+      "Keyframe, clay frame, animation, and final video",
+    );
+    const steps = Array.from(chain.querySelectorAll("li"));
+    expect(steps.map((step) => step.textContent)).toEqual([
+      "Keyframe",
+      "Clay frame",
+      "Animation",
+      "Final",
+    ]);
+    // Non-chain artifacts (source video) never appear in the strip.
+    expect(chain.textContent).not.toContain("Source video");
+    expect(
+      chain.querySelector(
+        'img[src="/api/productions/prod-e52/artifacts/prod-e52-key"]',
+      ),
+    ).not.toBeNull();
+  });
+});

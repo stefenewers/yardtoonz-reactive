@@ -47,6 +47,7 @@ export const productionApiErrorCodes = [
   "INVALID_MEDIA_CONTENT",
   "PRODUCTION_ALREADY_ACTIVE",
   "PROVIDER_CREDENTIALS_REQUIRED",
+  "RETRY_APPROVAL_REQUIRED",
   "INTERNAL_ERROR",
 ] as const;
 export type ProductionApiErrorCode = (typeof productionApiErrorCodes)[number];
@@ -185,6 +186,24 @@ export const recordOutputDecisionRequestSchema = z
   .readonly();
 export type RecordOutputDecisionRequest = z.infer<
   typeof recordOutputDecisionRequestSchema
+>;
+
+/**
+ * Paid-output retries regenerate provider-run stages, so the API gate
+ * rejects any retry request that does not carry an explicit human
+ * approval. There is no auto-regeneration path.
+ */
+export const productionRetryRequestSchema = z
+  .object({
+    approval: z
+      .object({ confirmed: z.literal(true) })
+      .strict()
+      .readonly(),
+  })
+  .strict()
+  .readonly();
+export type ProductionRetryRequest = z.infer<
+  typeof productionRetryRequestSchema
 >;
 
 export const productionDetailResponseSchema = z

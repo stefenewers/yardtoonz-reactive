@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { execFile } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -20,7 +20,9 @@ import { mediaToolPaths } from "../../src/lib/media-tools";
 import { createCandidateRepository } from "../../src/server/candidates/repository";
 import * as schema from "../../src/server/db/schema";
 import {
+  agentRuns,
   artifacts,
+  directorTreatments,
   productions,
   productionStages,
 } from "../../src/server/db/schema";
@@ -845,6 +847,195 @@ describe("persisted provider combinations", () => {
       expect(
         artifactRows(harness, id).some((row) => row.kind === "STYLED_FRAME"),
       ).toBe(false);
+    },
+  );
+});
+
+describe("treatment prompt routing", () => {
+  const treatment = {
+    candidateId: candidateFixtures[0]!.id,
+    humorMechanism: "Expectation subversion.",
+    audienceReactionEvidence: [],
+    recommendedSegment: { startSeconds: 0, endSeconds: 6 },
+    setupTimestamp: 1.5,
+    payoffTimestamp: 4.2,
+    adaptationConcept: "Clay re-staging of the setup and payoff.",
+    claymationPrompt: "TREATMENT CLAY PROMPT",
+    motionPrompt: "TREATMENT MOTION PROMPT",
+    socialCaption: "Caption.",
+    confidence: 0.8,
+    risks: [],
+    evidenceGaps: [],
+  };
+
+  function seedTreatment(harness: ReturnType<typeof createHarness>): void {
+    harness.database
+      .insert(directorTreatments)
+      .values({
+        id: "treatment-routing",
+        candidateId: candidateFixtures[0]!.id,
+        provider: "MOCK",
+        treatmentJson: JSON.stringify(treatment),
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      .run();
+  }
+
+  it(
+    "passes the persisted treatment prompts to the STYLE_IMAGE and ANIMATE_IMAGE executor contexts",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness, "RUNWAY", "OPENAI");
+      seedTreatment(harness);
+
+      const defaults = createDefaultStageExecutors();
+      const styleContexts: {
+        claymationPrompt: string | null | undefined;
+        motionPrompt: string | null | undefined;
+      }[] = [];
+      const animateContexts: {
+        claymationPrompt: string | null | undefined;
+        motionPrompt: string | null | undefined;
+      }[] = [];
+      harness.executors = {
+        STYLE_IMAGE: async (context) => {
+          styleContexts.push({
+            claymationPrompt: context.claymationPrompt,
+            motionPrompt: context.motionPrompt,
+          });
+          return defaults.STYLE_IMAGE(context);
+        },
+        ANIMATE_IMAGE: async (context) => {
+          animateContexts.push({
+            claymationPrompt: context.claymationPrompt,
+            motionPrompt: context.motionPrompt,
+          });
+          return defaults.ANIMATE_IMAGE(context);
+        },
+      };
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expect(styleContexts).toHaveLength(1);
+      expect(styleContexts[0]).toEqual({
+        claymationPrompt: "TREATMENT CLAY PROMPT",
+        motionPrompt: "TREATMENT MOTION PROMPT",
+      });
+      expect(animateContexts).toHaveLength(1);
+      expect(animateContexts[0]).toEqual({
+        claymationPrompt: "TREATMENT CLAY PROMPT",
+        motionPrompt: "TREATMENT MOTION PROMPT",
+      });
+    },
+  );
+
+  it(
+    "leaves treatment prompts null when the candidate has no persisted treatment",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness);
+
+      const defaults = createDefaultStageExecutors();
+      const contexts: {
+        claymationPrompt: string | null | undefined;
+        motionPrompt: string | null | undefined;
+      }[] = [];
+      harness.executors = {
+        STYLE_IMAGE: async (context) => {
+          contexts.push({
+            claymationPrompt: context.claymationPrompt,
+            motionPrompt: context.motionPrompt,
+          });
+          return defaults.STYLE_IMAGE(context);
+        },
+      };
+
+      await runUntil(harness, id, "COMPLETE");
+
+      expect(contexts).toHaveLength(1);
+      expect(contexts[0]).toEqual({
+        claymationPrompt: null,
+        motionPrompt: null,
+      });
+    },
+  );
+});
+
+describe("output QA score", () => {
+  it(
+    "records a 7/7 qa-inspector score for the fully conforming mock job",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness);
+      await runUntil(harness, id, "COMPLETE");
+
+      const runs = harness.database
+        .select({
+          decision: agentRuns.decision,
+          inputEvidenceJson: agentRuns.inputEvidenceJson,
+        })
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.productionId, id),
+            eq(agentRuns.agentKey, "qa-inspector"),
+          ),
+        )
+        .all();
+      const completeRun = runs.at(-1);
+      expect(completeRun?.decision).toContain("7/7 QA factors passed");
+
+      const evidence = JSON.parse(
+        completeRun?.inputEvidenceJson ?? "{}",
+      ) as Record<string, unknown>;
+      expect(evidence.outputQaPassed).toBe(true);
+      expect(evidence.outputQaPassedCount).toBe(7);
+    },
+  );
+
+  it(
+    "fails VALIDATE_OUTPUT and names the broken factor when lineage is incomplete",
+    { timeout: 120_000 },
+    async () => {
+      const harness = createHarness();
+      const id = await seedAndQueue(harness);
+      // Tick through EXTRACT_MEDIA .. MUX_AND_NORMALIZE (five stages), then
+      // break the lineage before the QA inspector observes the output.
+      for (let tick = 0; tick < 5; tick += 1) {
+        await runWorkerTick({
+          database: harness.database,
+          store: harness.store,
+          options: { workerId: WORKER_ID, executors: harness.executors },
+        });
+      }
+      harness.database
+        .delete(artifacts)
+        .where(
+          and(eq(artifacts.productionId, id), eq(artifacts.kind, "KEYFRAME")),
+        )
+        .run();
+
+      await runUntil(harness, id, "FAILED");
+
+      const stage = harness.database
+        .select({
+          errorCode: productionStages.errorCode,
+          safeErrorMessage: productionStages.safeErrorMessage,
+        })
+        .from(productionStages)
+        .where(
+          and(
+            eq(productionStages.productionId, id),
+            eq(productionStages.name, "VALIDATE_OUTPUT"),
+          ),
+        )
+        .get();
+      expect(stage?.errorCode).toBe("OUTPUT_VALIDATION_FAILED");
+      expect(stage?.safeErrorMessage).toContain("artifactLineage");
     },
   );
 });

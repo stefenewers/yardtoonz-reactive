@@ -18,7 +18,39 @@ import {
   validationRunDecision,
   validationRunEvidence,
 } from "../../src/domain/agent-trace";
+import { computeOutputQaScore } from "../../src/domain/production";
 import { SCORING_VERSION } from "../../src/domain/scoring";
+
+/** A fully-passing seven-factor QA score fixture for report construction. */
+function passingQaScore() {
+  return computeOutputQaScore({
+    width: 1080,
+    height: 1920,
+    audioPresent: true,
+    durationSeconds: 6,
+    framePreservation: true,
+    imageProvider: "OPENAI",
+    animationProvider: "RUNWAY",
+    artifacts: [
+      "SOURCE_VIDEO",
+      "EXTRACTED_CLIP",
+      "EXTRACTED_AUDIO",
+      "KEYFRAME",
+      "STYLED_FRAME",
+      "SILENT_ANIMATION",
+      "FINAL_VIDEO",
+    ].map((kind) => ({
+      kind,
+      provider:
+        kind === "STYLED_FRAME"
+          ? "OPENAI"
+          : kind === "SILENT_ANIMATION"
+            ? "RUNWAY"
+            : "MOCK",
+      byteSize: 10,
+    })),
+  });
+}
 
 const mockSelection = {
   imageProvider: "MOCK",
@@ -87,15 +119,16 @@ describe("decision text", () => {
     );
   });
 
-  it("quotes the validation report scalars for a passed QA gate", () => {
+  it("quotes the validation report scalars and QA score for a passed QA gate", () => {
     expect(
       validationRunDecision({
         width: 1080,
         height: 1920,
         durationSeconds: 6,
+        outputQa: passingQaScore(),
       }),
     ).toBe(
-      "Validated the final output: 1080x1920 9:16, audio present, 6s duration.",
+      "Validated the final output: 1080x1920 9:16, audio present, 6s duration; 7/7 QA factors passed.",
     );
   });
 
@@ -192,6 +225,7 @@ describe("evidence builders", () => {
       height: 1920,
       durationSeconds: 6,
       audioPresent: true,
+      outputQa: passingQaScore(),
     } as const;
     expect(
       stageCompleteEvidence({
@@ -206,6 +240,8 @@ describe("evidence builders", () => {
       height: 1920,
       durationSeconds: 6,
       audioPresent: true,
+      outputQaPassed: true,
+      outputQaPassedCount: 7,
     });
     expect(
       stageCompleteEvidence({

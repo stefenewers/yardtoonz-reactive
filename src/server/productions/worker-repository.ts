@@ -12,6 +12,7 @@ import {
   type ValidationReport,
   type WorkerOwnedStatus,
 } from "@/domain/production";
+import { directorTreatmentSchema } from "@/domain/director";
 import { ArtifactStoreError, type ArtifactStore } from "@/lib/artifact-store";
 
 import { ProductionGateError } from "./errors";
@@ -38,6 +39,7 @@ import {
 } from "./pipeline";
 import {
   artifacts,
+  directorTreatments,
   productions,
   productionStages,
   rightsConfirmations,
@@ -96,6 +98,11 @@ export interface PipelineStageState {
   readonly leaseExpiresAtMs: number | null;
 }
 
+export interface PipelineTreatmentPrompts {
+  readonly claymationPrompt: string | null;
+  readonly motionPrompt: string | null;
+}
+
 export interface PipelineState {
   readonly production: ProductionRow;
   /** Latest attempt of each worker stage, in canonical pipeline order. */
@@ -103,6 +110,11 @@ export interface PipelineState {
   /** Every stage row including superseded retry attempts. */
   readonly stageRows: readonly StageRow[];
   readonly artifactRows: readonly ArtifactRow[];
+  /**
+   * Prompts from the candidate's persisted Director treatment; both null
+   * when no treatment exists so the live executors fall back cleanly.
+   */
+  readonly treatmentPrompts: PipelineTreatmentPrompts;
 }
 
 export interface ClaimStageInput {
@@ -205,6 +217,34 @@ export function createProductionWorkerRepository(
   }
 
   /**
+   * The candidate's persisted treatment supplies the live-provider prompts:
+   * claymationPrompt for the OpenAI style call, motionPrompt for Runway
+   * promptText. A row that fails re-validation (a pre-contract row) is
+   * treated as absent — the operator's creative direction remains the
+   * fallback and nothing is guessed.
+   */
+  function getTreatmentPrompts(candidateId: string): PipelineTreatmentPrompts {
+    const row = database
+      .select({ treatmentJson: directorTreatments.treatmentJson })
+      .from(directorTreatments)
+      .where(eq(directorTreatments.candidateId, candidateId))
+      .get();
+    if (!row) {
+      return { claymationPrompt: null, motionPrompt: null };
+    }
+    const parsed = directorTreatmentSchema.safeParse(
+      JSON.parse(row.treatmentJson) as unknown,
+    );
+    if (!parsed.success) {
+      return { claymationPrompt: null, motionPrompt: null };
+    }
+    return {
+      claymationPrompt: parsed.data.claymationPrompt,
+      motionPrompt: parsed.data.motionPrompt,
+    };
+  }
+
+  /**
    * Builds the domain ProductionJob for transition validation. Worker
    * transitions pass their artifacts through the transition itself, so the
    * persisted set is only included when asked (the RETRY verification needs
@@ -294,6 +334,7 @@ export function createProductionWorkerRepository(
       stages,
       stageRows,
       artifactRows: getArtifactRows(productionId),
+      treatmentPrompts: getTreatmentPrompts(production.candidateId),
     };
   }
 

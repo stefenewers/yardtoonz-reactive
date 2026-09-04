@@ -85,6 +85,88 @@ export type SegmentSelection = z.infer<typeof segmentSelectionSchema>;
 
 export const outputDurationToleranceSeconds = 0.1;
 
+/** The documented demo output window: every factor score sits inside 5–8 seconds. */
+export const outputDurationMinSeconds = 5;
+export const outputDurationMaxSeconds = 8;
+
+/** The seven QA Inspector factors scored for every final output. */
+export const outputQaFactorKeys = [
+  "verticalDimensions",
+  "audioPresent",
+  "durationInRange",
+  "framePreservation",
+  "providerAttribution",
+  "artifactLineage",
+  "downloadReady",
+] as const;
+export type OutputQaFactorKey = (typeof outputQaFactorKeys)[number];
+
+export const outputQaScoreSchema = z
+  .object({
+    factors: z
+      .object({
+        verticalDimensions: z.boolean(),
+        audioPresent: z.boolean(),
+        durationInRange: z.boolean(),
+        framePreservation: z.boolean(),
+        providerAttribution: z.boolean(),
+        artifactLineage: z.boolean(),
+        downloadReady: z.boolean(),
+      })
+      .strict()
+      .readonly(),
+    passed: z.boolean(),
+  })
+  .strict()
+  .readonly();
+export type OutputQaScore = z.infer<typeof outputQaScoreSchema>;
+
+/** Observed per-artifact facts the QA score is computed from. */
+export interface OutputQaArtifactFact {
+  readonly kind: string;
+  readonly provider: string;
+  readonly byteSize: number | null;
+}
+
+/**
+ * Pure seven-factor output QA score (Technical Specification §8.7):
+ * 9:16 dimensions, audio presence, 5–8s duration, frame preservation,
+ * provider attribution, artifact lineage, and successful download.
+ * `passed` is true only when all seven hold — the QA Inspector records
+ * the factor map and gates the COMPLETE transition on it.
+ */
+export function computeOutputQaScore(input: {
+  readonly width: number;
+  readonly height: number;
+  readonly audioPresent: boolean;
+  readonly durationSeconds: number;
+  readonly framePreservation: boolean;
+  readonly imageProvider: string;
+  readonly animationProvider: string;
+  readonly artifacts: readonly OutputQaArtifactFact[];
+}): OutputQaScore {
+  const byKind = new Map(
+    input.artifacts.map((artifact) => [artifact.kind, artifact]),
+  );
+  const factors: Record<OutputQaFactorKey, boolean> = {
+    verticalDimensions: input.width * 16 === input.height * 9,
+    audioPresent: input.audioPresent,
+    durationInRange:
+      input.durationSeconds >= outputDurationMinSeconds &&
+      input.durationSeconds <= outputDurationMaxSeconds,
+    framePreservation: input.framePreservation,
+    providerAttribution:
+      byKind.get("STYLED_FRAME")?.provider === input.imageProvider &&
+      byKind.get("SILENT_ANIMATION")?.provider === input.animationProvider,
+    artifactLineage: artifactKinds.every((kind) => byKind.has(kind)),
+    downloadReady: (byKind.get("FINAL_VIDEO")?.byteSize ?? 0) > 0,
+  };
+  return {
+    factors,
+    passed: outputQaFactorKeys.every((key) => factors[key]),
+  };
+}
+
 export const validationReportSchema = z
   .object({
     playable: z.literal(true),
@@ -92,6 +174,7 @@ export const validationReportSchema = z
     height: z.number().int().positive(),
     durationSeconds: z.number().finite().positive(),
     audioPresent: z.literal(true),
+    outputQa: outputQaScoreSchema,
   })
   .strict()
   .readonly();
@@ -312,7 +395,7 @@ function parseSuccessfulValidation(
   const durationMatches =
     Math.abs(report.durationSeconds - segment.durationSeconds) <=
     outputDurationToleranceSeconds;
-  if (!isVertical || !durationMatches) {
+  if (!isVertical || !durationMatches || !report.outputQa.passed) {
     throw new ProductionTransitionError("VALIDATION_REQUIRED");
   }
   return report;

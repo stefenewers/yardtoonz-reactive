@@ -1,5 +1,5 @@
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
-import type { ValidationReport } from "@/domain/production";
+import { outputQaFactorKeys, type ValidationReport } from "@/domain/production";
 import { SCORING_VERSION } from "@/domain/scoring";
 import type { EngagementMetrics } from "@/shared/candidates";
 
@@ -105,9 +105,15 @@ export function animatedFrameRunDecision(provider: AgentRunProvider): string {
 
 /** Decision text for a passed deterministic output validation. */
 export function validationRunDecision(
-  report: Pick<ValidationReport, "width" | "height" | "durationSeconds">,
+  report: Pick<
+    ValidationReport,
+    "width" | "height" | "durationSeconds" | "outputQa"
+  >,
 ): string {
-  return `Validated the final output: ${report.width}x${report.height} 9:16, audio present, ${report.durationSeconds}s duration.`;
+  const passedCount = outputQaFactorKeys.filter(
+    (key) => report.outputQa.factors[key],
+  ).length;
+  return `Validated the final output: ${report.width}x${report.height} 9:16, audio present, ${report.durationSeconds}s duration; ${passedCount}/7 QA factors passed.`;
 }
 
 /** Failed runs quote the safe, bounded stage error message verbatim. */
@@ -181,6 +187,10 @@ export function validationRunEvidence(
     height: report.height,
     durationSeconds: report.durationSeconds,
     audioPresent: report.audioPresent,
+    outputQaPassed: report.outputQa.passed,
+    outputQaPassedCount: outputQaFactorKeys.filter(
+      (key) => report.outputQa.factors[key],
+    ).length,
   };
 }
 

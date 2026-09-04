@@ -5,11 +5,15 @@ import { promisify } from "node:util";
 import { z } from "zod";
 
 import {
+  computeOutputQaScore,
   outputDurationToleranceSeconds,
+  outputQaFactorKeys,
   type ArtifactKind,
+  type OutputQaArtifactFact,
   type ValidationReport,
   type WorkerOwnedStatus,
 } from "@/domain/production";
+import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import {
   generateArtifactStorageKey,
   type ArtifactStore,
@@ -216,12 +220,20 @@ export type WorkerStageErrorCode =
 
 /** Typed stage failure carrying the stable error code persisted for retry. */
 export class WorkerStageError extends Error {
+  /**
+   * Operator-facing message the thrower vouches for; null keeps the runner's
+   * generic stage-failure copy. Only code-authored deterministic content
+   * (enum names, QA factor keys) may flow into it.
+   */
+  readonly safeMessage: string | null;
+
   constructor(
     public readonly code: WorkerStageErrorCode,
     message: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; safeMessage?: string },
   ) {
     super(message, options);
+    this.safeMessage = options?.safeMessage ?? null;
   }
 }
 export interface FFmpegStep {
@@ -422,11 +434,20 @@ export async function probeMediaFile(filePath: string): Promise<MediaProbe> {
 /**
  * Pure 9:16 + A/V output gate (Technical Specification §8.7): playable by
  * FFprobe, 9:16 display orientation, duration inside the documented segment
- * tolerance, and at least one video and one audio stream.
+ * tolerance, and at least one video and one audio stream. The returned
+ * report additionally carries the seven-factor QA score computed from the
+ * production's persisted artifact facts and the re-verified frame digests;
+ * a failed factor rejects the stage.
  */
 export function buildValidationReport(
   probe: MediaProbe,
   segment: { readonly durationSeconds: number },
+  qa: {
+    readonly framePreservation: boolean;
+    readonly imageProvider: string;
+    readonly animationProvider: string;
+    readonly artifacts: readonly OutputQaArtifactFact[];
+  },
 ): ValidationReport {
   const video = probe.streams.find((stream) => stream.codec_type === "video");
   const audio = probe.streams.find((stream) => stream.codec_type === "audio");
@@ -454,13 +475,66 @@ export function buildValidationReport(
     );
   }
 
+  const outputQa = computeOutputQaScore({
+    width: video.width,
+    height: video.height,
+    audioPresent: Boolean(audio),
+    durationSeconds: probe.format.duration,
+    framePreservation: qa.framePreservation,
+    imageProvider: qa.imageProvider,
+    animationProvider: qa.animationProvider,
+    artifacts: qa.artifacts,
+  });
+  if (!outputQa.passed) {
+    const failed = outputQaFactorKeys.filter((key) => !outputQa.factors[key]);
+    // Factor keys are code-authored enum values, so the detailed message is
+    // bounded and safe to show operators deciding on a retry.
+    const safeMessage = `Final output failed QA factors: ${failed.join(", ")}.`;
+    throw new WorkerStageError("OUTPUT_VALIDATION_FAILED", safeMessage, {
+      safeMessage,
+    });
+  }
+
   return {
     playable: true,
     width: video.width,
     height: video.height,
     durationSeconds: probe.format.duration,
     audioPresent: true,
+    outputQa,
   };
+}
+
+/**
+ * Frame preservation: the frame-bearing artifacts the pipeline persisted
+ * (keyframe, styled frame, silent animation) must still match their
+ * persisted digests — the frames that went in are the frames validated
+ * out. Missing rows fail closed so a broken chain cannot pass.
+ */
+async function framesPreserved(
+  context: StageExecutorContext,
+): Promise<boolean> {
+  if (!context.productionArtifacts) return false;
+  const frameKinds: ArtifactKind[] = [
+    "KEYFRAME",
+    "STYLED_FRAME",
+    "SILENT_ANIMATION",
+  ];
+  for (const kind of frameKinds) {
+    const artifact = context.productionArtifacts.find(
+      (candidate) => candidate.kind === kind,
+    );
+    if (!artifact) return false;
+    try {
+      const integrity = await context.store.inspect(artifact.storageKey);
+      if (integrity.sha256 !== artifact.sha256) return false;
+    } catch {
+      // A stored frame that cannot be inspected is not preserved — the QA
+      // gate fails closed and the stage names the failed factors.
+      return false;
+    }
+  }
+  return true;
 }
 
 export interface StageUpstreamArtifact {
@@ -468,6 +542,15 @@ export interface StageUpstreamArtifact {
   readonly id: string;
   readonly storageKey: string;
   readonly sha256: string;
+}
+
+/** Persisted artifact fact the output QA score is computed from. */
+export interface ProductionQaArtifact {
+  readonly kind: ArtifactKind;
+  readonly provider: string;
+  readonly byteSize: number | null;
+  readonly sha256: string;
+  readonly storageKey: string;
 }
 
 export interface StageExecutorContext {
@@ -490,10 +573,36 @@ export interface StageExecutorContext {
    */
   readonly creativeDirection?: string | null;
   /**
+   * Director treatment prompt for the clay style call, from the candidate's
+   * persisted treatment. The OpenAI STYLE_IMAGE executor sends it when the
+   * job's persisted imageProvider is OPENAI; it outranks the operator's
+   * free-form creative direction because it is the treatment's actual
+   * claymation instruction. Null when no treatment exists.
+   */
+  readonly claymationPrompt?: string | null;
+  /**
+   * Director treatment prompt for the motion call, from the candidate's
+   * persisted treatment. The Runway ANIMATE_IMAGE executor sends it as
+   * promptText when the job's persisted animationProvider is RUNWAY. Null
+   * when no treatment exists.
+   */
+  readonly motionPrompt?: string | null;
+  /**
    * Durable anchor for reconcile-before-retry: called as soon as a live
    * provider accepts a new request so a crash mid-poll still records it.
    */
   readonly recordProviderRequestId?: (requestId: string) => Promise<void>;
+  /**
+   * The job's persisted provider selections — provider attribution is
+   * scored against these, never against the environment.
+   */
+  readonly imageProvider?: ImageProvider;
+  readonly animationProvider?: AnimationProvider;
+  /**
+   * Every persisted artifact of the production; the VALIDATE_OUTPUT QA
+   * score derives lineage, attribution, and download readiness from it.
+   */
+  readonly productionArtifacts?: readonly ProductionQaArtifact[];
 }
 
 export type StageArtifactMetadata = Record<
@@ -683,9 +792,22 @@ async function validateFinalOutput(
   );
   return {
     artifacts: [],
-    validationReport: buildValidationReport(probe, {
-      durationSeconds: context.segment.durationMs / 1000,
-    }),
+    validationReport: buildValidationReport(
+      probe,
+      {
+        durationSeconds: context.segment.durationMs / 1000,
+      },
+      {
+        framePreservation: await framesPreserved(context),
+        imageProvider: context.imageProvider ?? "MOCK",
+        animationProvider: context.animationProvider ?? "MOCK",
+        artifacts: (context.productionArtifacts ?? []).map((artifact) => ({
+          kind: artifact.kind,
+          provider: artifact.provider,
+          byteSize: artifact.byteSize,
+        })),
+      },
+    ),
   };
 }
 
