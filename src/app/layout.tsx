@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "YardToonz Reactive",
   description:
     "A human-directed workflow for culturally timely Yard Toonz cartoons.",
+  icons: { icon: "/brand/yard-toonz-logo-official.png" },
 };
 
 export default function RootLayout({

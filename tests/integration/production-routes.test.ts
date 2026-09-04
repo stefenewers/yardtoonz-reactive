@@ -167,6 +167,65 @@ describe("production API flow", () => {
     });
   });
 
+  it("serves persisted source attribution and answers unknown ids with a stable 404", async () => {
+    const { POST } = await import("../../src/app/api/productions/route");
+    const { GET } = await import(
+      "../../src/app/api/productions/[id]/attribution/route"
+    );
+    const created = await POST(
+      jsonRequest(
+        { candidateId: approvedCandidateId, segment },
+        "POST",
+        productionsUrl,
+      ),
+    );
+    const { production } = (await created.json()) as {
+      production: { id: string };
+    };
+
+    const response = await GET(new Request(productionsUrl), {
+      params: Promise.resolve({ id: production.id }),
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      attribution: {
+        candidateId: string;
+        platform: string;
+        sourceUrl: string | null;
+        sourceLabel: string;
+        caption: string;
+        observedAt: string;
+        socialCaption: string | null;
+        rightsConfirmation: {
+          confirmedAt: string;
+          confirmationTextVersion: string;
+        } | null;
+      };
+    };
+    const fixture = candidateFixtures[0]!;
+    expect(body.attribution.candidateId).toBe(approvedCandidateId);
+    expect(body.attribution.platform).toBe(fixture.platform);
+    expect(body.attribution.sourceLabel).toBe(fixture.sourceLabel);
+    expect(body.attribution.caption).toBe(fixture.caption);
+    expect(body.attribution.observedAt).toBe(fixture.observedAt);
+    // The demo fixture has no source URL; the panel reports the gap.
+    expect(body.attribution.sourceUrl).toBeNull();
+    // No Director treatment exists in this harness, so no social caption.
+    expect(body.attribution.socialCaption).toBeNull();
+    expect(body.attribution.rightsConfirmation).toEqual({
+      confirmedAt: "2026-09-03T12:02:00.000Z",
+      confirmationTextVersion: "rights-v1",
+    });
+
+    const missing = await GET(new Request(productionsUrl), {
+      params: Promise.resolve({ id: "prod_missing" }),
+    });
+    expect(await errorOf(missing)).toEqual({
+      code: "PRODUCTION_NOT_FOUND",
+      status: 404,
+    });
+  });
+
   it("walks draft → rights → upload → queued through the API and rejects re-starts", async () => {
     const { POST: createProduction } = await import(
       "../../src/app/api/productions/route"

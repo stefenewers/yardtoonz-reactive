@@ -18,6 +18,7 @@ import {
 } from "@/domain/job-output";
 import { lineageExplorerUrl } from "@/domain/lineage-explorer";
 import { createApiProductionClient } from "@/lib/production-client";
+import type { SourceAttribution } from "@/shared/attribution";
 import type { ProductionDetailResponse } from "@/shared/productions";
 import { AgentTraceMonitor } from "@/components/agent-trace-monitor";
 
@@ -48,6 +49,23 @@ function elapsedSeconds(startedAt: string | undefined, nowMs: number): number {
 }
 
 /**
+ * Caption package shipped alongside the video download: the generated
+ * social caption when the Director recorded one, otherwise the editorial
+ * source caption. A data URI keeps the download a pure computation.
+ */
+function captionDownloadPackage(
+  attribution: SourceAttribution | undefined,
+  productionId: string,
+): { fileName: string; href: string } | null {
+  const text = attribution?.socialCaption ?? attribution?.caption ?? "";
+  if (!text) return null;
+  return {
+    fileName: `yardtoonz-caption-${productionId}.txt`,
+    href: `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`,
+  };
+}
+
+/**
  * Authoritative monitor for a persisted production job: stage timeline,
  * safe failure display with retry, artifact lineage, output preview with
  * probed facts, and the approve/reject/download decision (UX specification
@@ -73,7 +91,13 @@ export function JobOutput({
   const [rejectNoteOpen, setRejectNoteOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [attribution, setAttribution] = useState<SourceAttribution>();
+  const [attributionState, setAttributionState] = useState<
+    "loading" | "loaded" | "error"
+  >("loading");
+  const [attributionError, setAttributionError] = useState<string>();
 
+  const captionDownload = captionDownloadPackage(attribution, productionId);
   const productionStatus = detail?.production.status;
   const statusRef = useRef(productionStatus);
   useEffect(() => {
@@ -120,6 +144,34 @@ export function JobOutput({
     return () => window.clearInterval(clock);
   }, []);
 
+  // Attribution is read-only persisted context: fetched once per production
+  // (and again on manual refresh), independent of the job-status polling.
+  // State changes happen only in the async continuations so a refresh never
+  // synchronously cascades a render from inside the effect.
+  useEffect(() => {
+    let active = true;
+    client
+      .fetchAttribution(productionId)
+      .then((result) => {
+        if (!active) return;
+        setAttribution(result);
+        setAttributionError(undefined);
+        setAttributionState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setAttributionError(
+          error instanceof Error
+            ? error.message
+            : "The attribution could not be loaded.",
+        );
+        setAttributionState("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, productionId, refreshToken]);
+
   const production = detail?.production;
   const timeline: StageTimelineRow[] = useMemo(
     () => buildStageTimeline(detail?.stages ?? [], production?.activeStage),
@@ -133,6 +185,13 @@ export function JobOutput({
     () => buildVisualChain(detail?.artifacts ?? []),
     [detail?.artifacts],
   );
+  // Before/after pairs the raw source keyframe with its clay frame when
+  // both exist; either half missing means no comparison yet.
+  const beforeAfter = useMemo(() => {
+    const before = visualChain.find((step) => step.kind === "KEYFRAME");
+    const after = visualChain.find((step) => step.kind === "STYLED_FRAME");
+    return before && after ? { before, after } : undefined;
+  }, [visualChain]);
 
   const finalArtifact = detail?.artifacts.find(
     (artifact) => artifact.kind === "FINAL_VIDEO",
@@ -479,6 +538,31 @@ export function JobOutput({
         </ol>
       )}
 
+      {beforeAfter && (
+        <div className="before-after" data-testid="before-after">
+          <figure>
+            <img
+              src={client.artifactUrl(
+                production.id,
+                beforeAfter.before.artifactId,
+              )}
+              alt="Source keyframe from the original clip (before)"
+            />
+            <figcaption>Before · source keyframe</figcaption>
+          </figure>
+          <figure>
+            <img
+              src={client.artifactUrl(
+                production.id,
+                beforeAfter.after.artifactId,
+              )}
+              alt="Clay frame after the Yard Toonz style pass (after)"
+            />
+            <figcaption>After · clay frame</figcaption>
+          </figure>
+        </div>
+      )}
+
       {output && (
         <>
           <h2>Output review</h2>
@@ -584,6 +668,16 @@ export function JobOutput({
                 >
                   Download MP4
                 </a>
+                {captionDownload && (
+                  <a
+                    className="secondary-button"
+                    href={captionDownload.href}
+                    download={captionDownload.fileName}
+                    data-testid="download-caption"
+                  >
+                    Download caption (.txt)
+                  </a>
+                )}
               </div>
               {busy && (
                 <p className="disabled-reason">
@@ -615,6 +709,92 @@ export function JobOutput({
             </div>
           </div>
         </>
+      )}
+
+      <h2>Source attribution &amp; caption package</h2>
+      {attributionState === "loading" && (
+        <p className="empty-state" role="status">
+          Loading the source attribution…
+        </p>
+      )}
+      {attributionState === "error" && (
+        <div className="error-banner" role="alert">
+          <div>
+            <strong>The attribution could not be loaded</strong>
+            <p>{attributionError ?? "The attribution could not be loaded."}</p>
+          </div>
+        </div>
+      )}
+      {attributionState === "loaded" && attribution && (
+        <div className="attribution-panel" data-testid="attribution-panel">
+          <div className="attribution-grid">
+            <section aria-label="Source reference">
+              <h3>Source reference</h3>
+              <dl className="facts-grid">
+                <div>
+                  <dt>Platform</dt>
+                  <dd>{attribution.platform}</dd>
+                </div>
+                <div>
+                  <dt>Observed</dt>
+                  <dd>
+                    {formatClockTime(attribution.observedAt) ||
+                      attribution.observedAt}
+                  </dd>
+                </div>
+              </dl>
+              <p className="attribution-label">{attribution.sourceLabel}</p>
+              {attribution.sourceUrl ? (
+                <a
+                  href={attribution.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="attribution-source-link"
+                >
+                  Open the original post (stored reference only)
+                </a>
+              ) : (
+                <p className="field-hint">No source URL was recorded.</p>
+              )}
+            </section>
+            <section aria-label="Caption package">
+              <h3>Caption package</h3>
+              <p
+                className="attribution-caption"
+                data-testid="caption-candidate"
+              >
+                {attribution.caption}
+              </p>
+              {attribution.socialCaption ? (
+                <p className="attribution-social" data-testid="caption-social">
+                  {attribution.socialCaption}
+                </p>
+              ) : (
+                <p className="field-hint" data-testid="caption-social-empty">
+                  No generated social caption yet — the Director treatment has
+                  not produced one.
+                </p>
+              )}
+            </section>
+            <section aria-label="Rights record">
+              <h3>Rights record</h3>
+              {attribution.rightsConfirmation ? (
+                <p className="rights-record" data-testid="rights-record">
+                  Confirmed{" "}
+                  {formatClockTime(
+                    attribution.rightsConfirmation.confirmedAt,
+                  ) || attribution.rightsConfirmation.confirmedAt}{" "}
+                  · text version{" "}
+                  {attribution.rightsConfirmation.confirmationTextVersion}
+                </p>
+              ) : (
+                <p className="field-hint" data-testid="rights-record-empty">
+                  No rights confirmation is recorded for this source.
+                </p>
+              )}
+            </section>
+          </div>
+        </div>
       )}
 
       <div className="action-row">

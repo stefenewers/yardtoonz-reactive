@@ -596,3 +596,85 @@ function makeTreatmentResource(): Record<string, unknown> {
     },
   };
 }
+
+describe("ProductionSetup one-click demo clip", () => {
+  afterEach(cleanup);
+
+  it("fetches the committed fixture and uploads it as the authorized source", async () => {
+    const fetchMock = installFetch(async (url, init) => {
+      if (url === "/api/productions" && init?.method === "POST") {
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
+      }
+      if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
+        return jsonResponse(200, makeDetail({}));
+      }
+      if (url === "/brand/demo/asisay-boss-demo.mp4") {
+        // Raw bytes: a jsdom Blob is not a valid undici Response body.
+        return new Response(new Uint8Array(1024), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        });
+      }
+      if (
+        url === "/api/productions/prod-e51/source" &&
+        init?.method === "POST"
+      ) {
+        return jsonResponse(200, makeDetail({ withSource: true }));
+      }
+      throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+    });
+
+    render(<ProductionSetup {...defaultProps()} />);
+    await screen.findByText("Linked to the persisted candidate confirmation.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Use demo clip" }));
+
+    await waitFor(() => {
+      expect(
+        findCall(fetchMock, "/api/productions/prod-e51/source", "POST"),
+      ).toBeDefined();
+    });
+    const uploadCall = findCall(
+      fetchMock,
+      "/api/productions/prod-e51/source",
+      "POST",
+    );
+    const uploaded = (uploadCall![1]?.body as FormData).get("source") as File;
+    expect(uploaded.name).toBe("asisay-boss-demo.mp4");
+    expect(uploaded.type).toBe("video/mp4");
+    expect(
+      findCall(fetchMock, "/brand/demo/asisay-boss-demo.mp4", "GET"),
+    ).toBeDefined();
+  });
+
+  it("surfaces a fixture load failure without uploading", async () => {
+    const fetchMock = installFetch(async (url, init) => {
+      if (url === "/api/productions" && init?.method === "POST") {
+        return jsonResponse(
+          201,
+          makeDetail({ production: { status: "DRAFT" } }),
+        );
+      }
+      if (url === "/api/productions/prod-e51" && init?.method === "PATCH") {
+        return jsonResponse(200, makeDetail({}));
+      }
+      if (url === "/brand/demo/asisay-boss-demo.mp4") {
+        return new Response("missing", { status: 404 });
+      }
+      throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+    });
+
+    render(<ProductionSetup {...defaultProps()} />);
+    await screen.findByText("Linked to the persisted candidate confirmation.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Use demo clip" }));
+
+    await screen.findByText(/HTTP 404/);
+    expect(
+      findCall(fetchMock, "/api/productions/prod-e51/source", "POST"),
+    ).toBeUndefined();
+  });
+});

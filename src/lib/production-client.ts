@@ -11,6 +11,10 @@ import {
   type ProductionDetailResponse,
   type RecordOutputDecisionRequest,
 } from "../shared/productions";
+import {
+  productionAttributionResponseSchema,
+  type SourceAttribution,
+} from "../shared/attribution";
 import type { ZodType } from "zod";
 
 /**
@@ -117,6 +121,12 @@ export interface ProductionApiClient {
   fetchDirectorTreatment(
     candidateId: string,
   ): Promise<DirectorTreatmentResource | null>;
+  /**
+   * The persisted source attribution and caption context for the output
+   * view: origin reference, editorial caption, generated social caption,
+   * and the rights record.
+   */
+  fetchAttribution(productionId: string): Promise<SourceAttribution>;
   /** Safe URL for previewing or downloading one stored artifact. */
   artifactUrl(
     productionId: string,
@@ -203,6 +213,17 @@ export function createApiProductionClient(
         listProductionsResponseSchema,
       );
       return payload.productions;
+    },
+    async fetchAttribution(productionId) {
+      const response = await request(
+        `/api/productions/${productionId}/attribution`,
+        { method: "GET" },
+      );
+      const payload = await parsePayload(
+        response,
+        productionAttributionResponseSchema,
+      );
+      return payload.attribution;
     },
     async fetchDirectorTreatment(treatmentCandidateId) {
       const response = await request(

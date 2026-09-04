@@ -10,6 +10,7 @@ import {
   type CandidateIntakeProviderKind,
   type CandidateIntakeRecord,
   type CandidateIntakeResult,
+  type ManualCandidateIntake,
 } from "@/shared/candidate-intake";
 
 import type { CandidateRepository } from "./repository";
@@ -47,6 +48,42 @@ export function createManualCandidateIntakeProvider(
   payload: unknown,
 ): CandidateIntakeProvider {
   return { kind: "MANUAL", load: () => [payload] };
+}
+
+/**
+ * Build a MANUAL intake record from a pasted social URL. The URL is stored
+ * verbatim as a source reference — nothing is fetched from the platform —
+ * and only hand-supplied editorial context rides along.
+ */
+export function pastedUrlToIntakeRecord(input: {
+  pasted: ManualCandidateIntake;
+  now: string;
+}): CandidateIntakeRecord {
+  const url = new URL(input.pasted.url);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new CandidateIntakeError("INVALID_RECORD", [
+      "pasted url: only http(s) links are accepted",
+    ]);
+  }
+  return candidateIntakeRecordSchema.parse({
+    platform: input.pasted.platform,
+    sourceUrl: input.pasted.url,
+    sourceLabel: input.pasted.sourceLabel ?? `${url.hostname} (pasted link)`,
+    caption: input.pasted.caption,
+    observedAt: input.now,
+    metrics: input.pasted.metrics ?? {},
+    commentExcerpts: [],
+    fitChecklist: {
+      clearPremise: false,
+      recognizableScenario: false,
+      payoffWithinEightSeconds: false,
+      authorizedAudio: false,
+      visuallySimple: false,
+      culturallyRelevant: false,
+    },
+    adaptationNote:
+      "Pasted by the operator as a source reference — nothing was fetched from the platform.",
+  });
 }
 
 /**

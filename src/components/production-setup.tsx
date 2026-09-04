@@ -8,6 +8,7 @@ import {
 } from "@/domain/director";
 import { humanizeProvider } from "@/domain/inbox";
 import type { SegmentSelection } from "@/domain/production";
+import { demoClip } from "@/shared/demo";
 import {
   evaluateSegmentDraft,
   evaluateSourceFile,
@@ -194,6 +195,45 @@ export function ProductionSetup({
     const selected = event.target.files?.[0];
     event.target.value = "";
     if (!selected || !production) return;
+    await uploadSourceFile(selected);
+  }
+
+  /** One-click demo path: fetch the committed owner-cleared fixture. */
+  async function handleUseDemoClip() {
+    if (!production || uploading || starting) return;
+    setActionError(undefined);
+    try {
+      const response = await fetch(demoClip.url);
+      if (!response.ok) {
+        throw new Error(
+          `The demo clip could not be loaded (HTTP ${response.status}).`,
+        );
+      }
+      // Byte-normalize the clip: undici Blobs break jsdom FormData, and
+      // raw bytes are valid BlobParts everywhere.
+      const blob = await response.blob();
+      await uploadSourceFile(
+        new File(
+          [new Uint8Array(await blob.arrayBuffer())],
+          demoClip.fileName,
+          {
+            type: "video/mp4",
+          },
+        ),
+      );
+    } catch (caught) {
+      setSourceError(
+        caught instanceof Error
+          ? caught.message
+          : "The demo clip could not be loaded.",
+      );
+      setPreviewUrl(undefined);
+    }
+  }
+
+  /** Shared by the file picker and the demo clip — evaluate, preview, upload. */
+  async function uploadSourceFile(selected: File) {
+    if (!production) return;
 
     setActionError(undefined);
     const problems = evaluateSourceFile(selected, maxUploadMb);
@@ -370,6 +410,18 @@ export function ProductionSetup({
             <strong className="upload-file-name">
               {file ? file.name : "Choose an authorized MP4"}
             </strong>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void handleUseDemoClip()}
+              disabled={uploading || starting}
+            >
+              Use demo clip
+            </button>
+            <p className="field-hint">
+              Loads the committed owner-cleared 6-second fixture (
+              {demoClip.fileName}) — never a social-platform download.
+            </p>
 
             {previewUrl && (
               <div className="preview-block">

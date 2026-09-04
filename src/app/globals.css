@@ -89,6 +89,13 @@ input:focus-visible {
   color: var(--accent-dark);
   font-weight: 950;
 }
+
+/* The official owner-delivered logo sits inside the same tilted tile. */
+.brand-mark--logo {
+  padding: 0.2rem;
+  object-fit: contain;
+}
+
 .header-meta {
   display: flex;
   align-items: center;
@@ -2433,4 +2440,171 @@ input:focus-visible {
     left: 50%;
     top: -1.1rem;
   }
+}
+
+/* Demo wow layer */
+
+.thumbnail-frame {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+.demo-panel {
+  display: grid;
+  gap: 0.875rem;
+  margin-top: 1rem;
+  padding: 1rem 1.125rem;
+  border: 2px solid var(--outline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--outline);
+}
+
+.demo-panel-row {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+
+.demo-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.demo-hint code {
+  font-size: 0.78rem;
+}
+
+.field-hint {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* Manual paste intake */
+
+.manual-intake {
+  position: relative;
+}
+
+.manual-intake-panel {
+  display: grid;
+  gap: 0.625rem;
+  margin-top: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 2px solid var(--outline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  min-width: min(21rem, 100%);
+}
+
+.manual-intake-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.manual-intake-field {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.manual-intake-field select,
+.manual-intake-field input,
+.manual-intake-field textarea {
+  border: 1.5px solid var(--outline);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface-raised, var(--surface));
+}
+
+.manual-intake-error {
+  color: var(--danger, #b3261e);
+  font-size: 0.8rem;
+}
+
+/* Before/after comparison and attribution panel */
+
+.before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.875rem;
+  margin-top: 1rem;
+}
+
+.before-after figure {
+  margin: 0;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.before-after img {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border: 2px solid var(--outline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.before-after figcaption {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.attribution-panel {
+  margin-top: 0.75rem;
+  padding: 1rem 1.125rem;
+  border: 2px solid var(--outline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.attribution-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.attribution-grid h3 {
+  margin: 0 0 0.375rem;
+  font-size: 0.9rem;
+}
+
+.attribution-label {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+}
+
+.attribution-caption {
+  margin: 0.25rem 0;
+  line-height: 1.5;
+}
+
+.attribution-social {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.625rem;
+  border-left: 3px solid var(--outline);
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.rights-record {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
 }

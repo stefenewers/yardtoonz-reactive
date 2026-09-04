@@ -249,3 +249,33 @@ describe("CandidateInbox state inventory", () => {
     );
   });
 });
+
+describe("CandidateInbox demo keyframe thumbnails", () => {
+  afterEach(cleanup);
+
+  it("shows the committed keyframe for the pinned demo candidate", () => {
+    renderInbox({
+      candidates: [makeCandidate({ id: "cand-rain-laundry-003", overall: 90 })],
+    });
+
+    const thumb = document.querySelector<HTMLImageElement>(
+      ".candidate-row img.thumbnail-frame",
+    );
+    expect(thumb).not.toBeNull();
+    expect(thumb!.getAttribute("src")).toBe(
+      "/brand/demo/keyframes/keyframe-1.jpg",
+    );
+    expect(thumb!.getAttribute("alt")).toBe("");
+  });
+
+  it("keeps platform initials for candidates without demo media", () => {
+    renderInbox({
+      candidates: [makeCandidate({ id: "cand-other-001", overall: 70 })],
+    });
+
+    expect(
+      document.querySelector(".candidate-row img.thumbnail-frame"),
+    ).toBeNull();
+    expect(screen.getByText("Ti")).toBeTruthy();
+  });
+});

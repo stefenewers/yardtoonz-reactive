@@ -512,4 +512,76 @@ describe("candidate import API", () => {
     expect(malformed.status).toBe(400);
     expect(await errorCode(malformed)).toBe("INVALID_REQUEST");
   });
+
+  it("imports a pasted social URL as a MANUAL candidate stored as a source reference", async () => {
+    const { repository } = createMemoryRepository();
+    useRepository(repository);
+
+    const imported = importCandidatesResponseSchema.parse(
+      await (
+        await importCandidatesRoute(
+          importRequest({
+            source: "MANUAL",
+            candidate: {
+              url: "https://www.tiktok.com/@yardvendor/video/735123",
+              platform: "TIKTOK",
+              caption: "Vendor change, full committee reaction",
+            },
+          }),
+        )
+      ).json(),
+    ).import;
+    expect(imported.providerKind).toBe("MANUAL");
+    expect(imported.imported).toBe(1);
+    expect(imported.candidateIds).toHaveLength(1);
+
+    const list = listCandidatesResponseSchema.parse(
+      await (await listCandidatesRoute(listRequest())).json(),
+    ).candidates;
+    expect(list).toHaveLength(1);
+    const [candidate] = list;
+    // The pasted URL is stored verbatim as a source reference — the intake
+    // never fetches platform content, so metrics stay empty and the fit
+    // checklist starts unjudged for editorial review.
+    expect(candidate.sourceUrl).toBe(
+      "https://www.tiktok.com/@yardvendor/video/735123",
+    );
+    expect(candidate.platform).toBe("TIKTOK");
+    expect(candidate.sourceLabel).toBe("www.tiktok.com (pasted link)");
+    expect(candidate.caption).toBe("Vendor change, full committee reaction");
+    expect(candidate.metrics.views).toBeUndefined();
+    expect(candidate.commentExcerpts).toEqual([]);
+    expect(candidate.adaptationNote).toMatch(/nothing was fetched/i);
+  });
+
+  it("maps invalid pasted URLs to stable error codes", async () => {
+    const { repository } = createMemoryRepository();
+    useRepository(repository);
+
+    const badScheme = await importCandidatesRoute(
+      importRequest({
+        source: "MANUAL",
+        candidate: {
+          url: "ftp://example.com/clip.mp4",
+          platform: "OTHER",
+          caption: "Not an http link",
+        },
+      }),
+    );
+    expect(badScheme.status).toBe(400);
+    expect(await errorCode(badScheme)).toBe("INVALID_RECORD");
+
+    const malformedPaste = await importCandidatesRoute(
+      importRequest({
+        source: "MANUAL",
+        candidate: {
+          url: "not a url",
+          platform: "OTHER",
+          caption: "Broken paste",
+        },
+      }),
+    );
+    expect(malformedPaste.status).toBe(400);
+    expect(await errorCode(malformedPaste)).toBe("INVALID_REQUEST");
+  });
 });

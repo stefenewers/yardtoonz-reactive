@@ -14,9 +14,14 @@ import { createApiCandidateClient } from "@/lib/candidate-client";
 import { fetchHealthReport } from "@/lib/health-client";
 import type { PublicHealthReportPayload } from "@/shared/health";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
+import { BrandMark } from "@/components/brand-mark";
 import { CandidateDetail } from "@/components/candidate-detail";
 import { CandidateInbox } from "@/components/candidate-inbox";
+import { DemoActions } from "@/components/demo-actions";
+import { demoCandidateId } from "@/shared/demo";
+
 import { ProductionSetup } from "@/components/production-setup";
+import { ManualIntakeAction } from "@/components/manual-intake-action";
 import { ScoutHeaderAction } from "@/components/scout-header-action";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
@@ -91,10 +96,13 @@ export function CandidateWorkspace({
     };
   }, []);
 
-  async function loadCandidates(requestedSort: InboxSortState = sort) {
+  async function loadCandidates(
+    requestedSort: InboxSortState = sort,
+  ): Promise<Candidate[]> {
     setRequestState("loading");
     setError(undefined);
     const observedAt = Date.now();
+
     try {
       const loaded = await client.listCandidates({
         sort: requestedSort.field,
@@ -103,6 +111,7 @@ export function CandidateWorkspace({
       setCandidates(loaded);
       setFetchedAt(observedAt);
       setRequestState("idle");
+      return loaded;
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -110,6 +119,7 @@ export function CandidateWorkspace({
           : "Candidates could not be loaded.",
       );
       setRequestState("error");
+      return [];
     }
   }
 
@@ -122,6 +132,19 @@ export function CandidateWorkspace({
     setSelected(candidate);
     setScreen("review");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** One click: land on the pinned walkthrough candidate's review screen. */
+  async function openDemoCandidate() {
+    const loaded = await loadCandidates();
+    const demo = loaded.find((candidate) => candidate.id === demoCandidateId);
+    if (demo) {
+      openCandidate(demo);
+      return;
+    }
+    setError(
+      `The pinned demo candidate (${demoCandidateId}) is missing from the seeded set. Reset the demo data and try again.`,
+    );
   }
 
   /** One persisted decision lands in the detail view and the inbox row alike. */
@@ -216,7 +239,7 @@ export function CandidateWorkspace({
           onClick={() => setScreen("inbox")}
           aria-label="Return to candidate inbox"
         >
-          <span className="brand-mark">YT</span>
+          <BrandMark />
           <span>
             YardToonz <b>Reactive</b>
           </span>
@@ -250,6 +273,7 @@ export function CandidateWorkspace({
             Diagnostics
           </a>
           <ScoutHeaderAction onImported={() => loadCandidates()} />
+          <ManualIntakeAction onImported={() => loadCandidates()} />
         </div>
       </header>
 
@@ -290,6 +314,12 @@ export function CandidateWorkspace({
             <ProviderDisclosure
               imageProvider={imageProvider}
               animationProvider={animationProvider}
+            />
+
+            <DemoActions
+              busy={busy}
+              onUseDemoCandidate={() => void openDemoCandidate()}
+              onReset={() => void loadCandidates()}
             />
 
             <CandidateInbox
