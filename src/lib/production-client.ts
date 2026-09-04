@@ -99,7 +99,10 @@ export interface ProductionApiClient {
   /** Authoritative job snapshot: production, stages, artifacts, decision. */
   getDetail(productionId: string): Promise<ProductionDetailResponse>;
   /** Re-arms a FAILED production; the response is the re-armed detail. */
-  retry(productionId: string): Promise<ProductionDetailResponse>;
+  retry(
+    productionId: string,
+    approval: { confirmed: true },
+  ): Promise<ProductionDetailResponse>;
   /** Persists the output decision; the response carries the fresh verdict. */
   recordDecision(
     productionId: string,
@@ -176,9 +179,11 @@ export function createApiProductionClient(
     async getDetail(productionId) {
       return send(`/api/productions/${productionId}`, { method: "GET" });
     },
-    async retry(productionId) {
+    async retry(productionId, approval) {
       return send(`/api/productions/${productionId}/retry`, {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ approval }),
       });
     },
     async recordDecision(productionId, body) {

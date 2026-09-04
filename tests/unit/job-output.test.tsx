@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import { JobOutput } from "../../src/components/job-output";
@@ -244,12 +245,28 @@ describe("JobOutput", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Retry failed stage" }));
 
+    // The first click must never call the API: paid regeneration waits
+    // for an explicit human confirmation.
+    expect(
+      findCall(fetchMock, "/api/productions/prod-e52/retry", "POST"),
+    ).toBeUndefined();
+
+    const confirmGroup = screen.getByRole("group", {
+      name: "Confirm retry of paid provider output",
+    });
+    fireEvent.click(
+      within(confirmGroup).getByRole("button", { name: "Confirm paid retry" }),
+    );
+
     const retryCall = findCall(
       fetchMock,
       "/api/productions/prod-e52/retry",
       "POST",
     );
     expect(retryCall).toBeDefined();
+    expect(JSON.parse(retryCall?.[1]?.body as string)).toEqual({
+      approval: { confirmed: true },
+    });
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
@@ -276,6 +293,7 @@ describe("JobOutput", () => {
 
     await screen.findByRole("heading", { name: "Job monitor" });
     fireEvent.click(screen.getByRole("button", { name: "Retry failed stage" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm paid retry" }));
 
     await screen.findByText(/Only failed productions can be retried\./);
     // The original safe failure stays visible while the action error shows.

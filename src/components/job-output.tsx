@@ -66,6 +66,7 @@ export function JobOutput({
   const [loadError, setLoadError] = useState<string>();
   const [refreshToken, setRefreshToken] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const [confirmingRetry, setConfirmingRetry] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState<"APPROVED" | "REJECTED">();
   const [actionError, setActionError] = useState<string>();
   const [rejectNoteOpen, setRejectNoteOpen] = useState(false);
@@ -157,7 +158,7 @@ export function JobOutput({
     setRetrying(true);
     setActionError(undefined);
     try {
-      setDetail(await client.retry(production.id));
+      setDetail(await client.retry(production.id, { confirmed: true }));
     } catch (retryError) {
       setActionError(
         retryError instanceof Error
@@ -299,11 +300,42 @@ export function JobOutput({
           <button
             type="button"
             className="primary-button"
-            onClick={() => void handleRetry()}
+            onClick={() => setConfirmingRetry(true)}
             disabled={retrying}
           >
             {retrying ? "Retrying…" : "Retry failed stage"}
           </button>
+          {confirmingRetry && (
+            <div
+              className="retry-approval"
+              role="group"
+              aria-label="Confirm retry of paid provider output"
+            >
+              <p>
+                Retrying re-runs the failed stage on its provider and may
+                regenerate paid output. Confirm to proceed.
+              </p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setConfirmingRetry(false);
+                  void handleRetry();
+                }}
+                disabled={retrying}
+              >
+                {retrying ? "Retrying…" : "Confirm paid retry"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setConfirmingRetry(false)}
+                disabled={retrying}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -898,6 +898,21 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+.retry-approval {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  margin-top: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid #e96c5b;
+  border-radius: 0.5rem;
+}
+
+.retry-approval p {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .output-grid {
   display: grid;
   grid-template-columns: minmax(16rem, 24rem) 1fr;

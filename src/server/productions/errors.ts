@@ -21,7 +21,8 @@ export type ProductionGateErrorCode =
   | "SOURCE_REQUIRED"
   | "SOURCE_TOO_SHORT"
   | "SOURCE_AUDIO_REQUIRED"
-  | "PRODUCTION_ALREADY_ACTIVE";
+  | "PRODUCTION_ALREADY_ACTIVE"
+  | "RETRY_APPROVAL_REQUIRED";
 
 export class ProductionGateError extends Error {
   constructor(public readonly code: ProductionGateErrorCode) {
@@ -48,6 +49,8 @@ const gateErrorMessages: Record<ProductionGateErrorCode, string> = {
   SOURCE_AUDIO_REQUIRED: "The source MP4 must include an audio track.",
   PRODUCTION_ALREADY_ACTIVE:
     "This candidate already has an active production. Wait for it to finish or fail before starting another.",
+  RETRY_APPROVAL_REQUIRED:
+    "Confirm the retry before regenerating paid provider output.",
 };
 
 const gateErrorStatuses: Record<ProductionGateErrorCode, number> = {
@@ -60,6 +63,7 @@ const gateErrorStatuses: Record<ProductionGateErrorCode, number> = {
   SOURCE_TOO_SHORT: 409,
   SOURCE_AUDIO_REQUIRED: 400,
   PRODUCTION_ALREADY_ACTIVE: 409,
+  RETRY_APPROVAL_REQUIRED: 409,
 };
 
 const transitionErrorMessages: Record<
