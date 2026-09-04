@@ -10,6 +10,7 @@ import {
   StoryboardApiError,
 } from "@/lib/storyboard-client";
 import type { StoryboardResource } from "@/domain/storyboard";
+import { BrandMark } from "@/components/brand-mark";
 
 /**
  * The storyboard strip: the candidate's keyframe plan rendered as an
@@ -128,7 +129,7 @@ export function StoryboardStrip({ candidateId }: { candidateId: string }) {
           href={storyboardBackHref}
           aria-label="Return to the candidate workspace"
         >
-          <span className="brand-mark">YT</span>
+          <BrandMark />
           <span>
             YardToonz <b>Reactive</b>
           </span>

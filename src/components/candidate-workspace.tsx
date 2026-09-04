@@ -14,6 +14,7 @@ import { createApiCandidateClient } from "@/lib/candidate-client";
 import { fetchHealthReport } from "@/lib/health-client";
 import type { PublicHealthReportPayload } from "@/shared/health";
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
+import { BrandMark } from "@/components/brand-mark";
 import { CandidateDetail } from "@/components/candidate-detail";
 import { CandidateInbox } from "@/components/candidate-inbox";
 import { ProductionSetup } from "@/components/production-setup";
@@ -216,7 +217,7 @@ export function CandidateWorkspace({
           onClick={() => setScreen("inbox")}
           aria-label="Return to candidate inbox"
         >
-          <span className="brand-mark">YT</span>
+          <BrandMark />
           <span>
             YardToonz <b>Reactive</b>
           </span>

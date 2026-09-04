@@ -89,6 +89,13 @@ input:focus-visible {
   color: var(--accent-dark);
   font-weight: 950;
 }
+
+/* The official owner-delivered logo sits inside the same tilted tile. */
+.brand-mark--logo {
+  padding: 0.2rem;
+  object-fit: contain;
+}
+
 .header-meta {
   display: flex;
   align-items: center;
