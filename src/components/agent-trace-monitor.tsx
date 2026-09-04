@@ -96,7 +96,10 @@ export function AgentTraceMonitor({
       active = false;
       window.clearInterval(interval);
     };
-  }, [client, candidateId, productionId, refreshToken]);
+    // productionStatus re-arms this effect on every transition, so the
+    // moment a job turns terminal one final fetch lands the cards on the
+    // finished truth instead of the last mid-run poll.
+  }, [client, candidateId, productionId, productionStatus, refreshToken]);
 
   const roster = candidateId !== undefined ? sixAgentRoster : mediaAgentRoster;
   const cards: readonly AgentCardView[] = useMemo(

@@ -79,7 +79,8 @@ export interface DirectorTreatmentServiceDeps {
  * replays return early and never duplicate rows. The decision is the
  * treatment's concept and the confidence is the treatment's own; elapsed
  * covers the treatment build (mock) or the live provider round-trip
- * (OpenAI), and the provider is the one that actually produced it.
+ * (OpenAI), and the provider and model are the ones that actually
+ * produced it.
  */
 function recordDirectorRun(
   deps: DirectorTreatmentServiceDeps,
@@ -101,6 +102,7 @@ function recordDirectorRun(
     decision: input.created.treatment.adaptationConcept,
     confidence: input.created.treatment.confidence,
     provider: input.provider,
+    model: input.created.model,
     elapsedMs: input.elapsedMs,
     candidateId: input.candidateId,
     now: new Date(),
@@ -211,26 +213,12 @@ export function createDirectorTreatmentService(
       // replays return early above and never duplicate rows. Elapsed is the
       // measured build time; the decision is the treatment's concept and the
       // confidence the treatment itself reported.
-      insertAgentRun(deps.database, {
-        agentKey: "yardtoonz-director",
-        state: "COMPLETE",
-        inputEvidence: directorRunEvidence({
-          provider: "MOCK",
-          metrics: candidate.metrics,
-          commentCount: candidate.commentExcerpts.length,
-          adaptationNoteSupplied: candidate.adaptationNote !== undefined,
-          transcriptSupplied: request.transcript !== undefined,
-          sourceVideoMetadataSupplied:
-            request.sourceVideoMetadata !== undefined,
-          keyframeCount: request.keyframes?.length ?? 0,
-          creativeDirectionSupplied: request.creativeDirection !== undefined,
-        }),
-        decision: created.treatment.adaptationConcept,
-        confidence: created.treatment.confidence,
-        provider: "MOCK",
-        elapsedMs: Math.max(0, Date.now() - startedAtMs),
+      recordDirectorRun(deps, {
         candidateId: candidate.id,
-        now: new Date(),
+        provider: "MOCK",
+        evidence: traceEvidence,
+        created,
+        elapsedMs: Math.max(0, Date.now() - startedAtMs),
       });
 
       return created;
