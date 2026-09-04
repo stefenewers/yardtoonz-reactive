@@ -32,13 +32,32 @@ function jsonResponse(status: number, body: unknown): Response {
 
 function installFetch(
   handler: (url: string, init: RequestInit | undefined) => Promise<Response>,
+  options: { attribution?: unknown; attributionFails?: boolean } = {},
 ) {
   // The embedded agent-trace monitor polls its own API; route those calls
-  // to an empty trace so job assertions stay focused on the monitor.
+  // to an empty trace so job assertions stay focused on the monitor. The
+  // attribution panel gets a valid default so job-focused tests stay quiet;
+  // tests pass options.attribution to override the payload or
+  // options.attributionFails to exercise the panel's error state.
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/api/agent-trace")) {
       return Promise.resolve(jsonResponse(200, { runs: [] }));
+    }
+    if (url.endsWith("/attribution")) {
+      if (options.attributionFails) {
+        return Promise.resolve(
+          jsonResponse(500, {
+            error: { code: "INTERNAL", message: "boom" },
+          }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse(200, {
+          attribution:
+            "attribution" in options ? options.attribution : makeAttribution(),
+        }),
+      );
     }
     return handler(url, init);
   });
@@ -66,6 +85,26 @@ function makeStage(overrides: Record<string, unknown> = {}) {
     attempt: 1,
     ...overrides,
   };
+}
+
+const ATTRIBUTION = {
+  candidateId: "cand-e52",
+  platform: "TIKTOK",
+  sourceUrl: "https://www.tiktok.com/@vendor/video/735123",
+  sourceLabel: "www.tiktok.com (pasted link)",
+  caption: "Vendor change, full committee reaction",
+  observedAt: ISO,
+  socialCaption: "Committee switch-up in clay form 🍂 #YardToonz",
+  rightsConfirmation: {
+    confirmedAt: ISO,
+    confirmationTextVersion: "rights-v1",
+  },
+};
+
+function makeAttribution(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { ...ATTRIBUTION, ...overrides };
 }
 
 function makeArtifact(overrides: Record<string, unknown> = {}) {
@@ -488,6 +527,9 @@ describe("JobOutput", () => {
       if (url === "/api/productions/prod-e52") {
         return jsonResponse(200, completeDetail());
       }
+      if (String(url).endsWith("/attribution")) {
+        return jsonResponse(200, { attribution: makeAttribution() });
+      }
       throw new Error(`Unexpected request: ${method} ${String(url)}`);
     });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -584,5 +626,122 @@ describe("JobOutput visual chain", () => {
         'img[src="/api/productions/prod-e52/artifacts/prod-e52-key"]',
       ),
     ).not.toBeNull();
+  });
+
+  it("renders the before/after source keyframe vs clay frame comparison", async () => {
+    installFetch(async () => jsonResponse(200, chainDetail()));
+    renderMonitor();
+
+    const comparison = await screen.findByTestId("before-after");
+    const figures = comparison.querySelectorAll("figure");
+    expect(figures).toHaveLength(2);
+    expect(figures[0].textContent).toContain("Before · source keyframe");
+    expect(figures[1].textContent).toContain("After · clay frame");
+    expect(
+      figures[0].querySelector(
+        'img[src="/api/productions/prod-e52/artifacts/prod-e52-key"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      figures[1].querySelector(
+        'img[src="/api/productions/prod-e52/artifacts/prod-e52-clay"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it("hides the before/after comparison until both keyframe and clay frame exist", async () => {
+    installFetch(async () =>
+      jsonResponse(
+        200,
+        makeDetail({
+          status: "COMPLETE",
+          detail: {
+            stages: STAGE_NAMES.map((name) =>
+              makeStage({ id: `stage-${name}`, name, status: "COMPLETE" }),
+            ),
+            artifacts: [
+              makeArtifact({ id: "prod-e52-source" }),
+              COMPLETE_FINAL_ARTIFACT,
+            ],
+          },
+        }),
+      ),
+    );
+    renderMonitor();
+
+    await screen.findByRole("button", { name: "Approve output" });
+    expect(screen.queryByTestId("before-after")).toBeNull();
+  });
+});
+
+describe("JobOutput attribution panel", () => {
+  it("shows the source reference, caption package, and rights record", async () => {
+    installFetch(async () => jsonResponse(200, chainDetail()));
+    renderMonitor();
+
+    const panel = await screen.findByTestId("attribution-panel");
+    const source = within(panel).getByLabelText("Source reference");
+    expect(source.textContent).toContain("TIKTOK");
+    expect(source.textContent).toContain("www.tiktok.com (pasted link)");
+    const link = within(source).getByTestId("attribution-source-link");
+    expect(link.getAttribute("href")).toBe(ATTRIBUTION.sourceUrl);
+    expect(link.textContent).toContain("stored reference only");
+
+    const captionPackage = within(panel).getByLabelText("Caption package");
+    expect(
+      within(captionPackage).getByTestId("caption-candidate").textContent,
+    ).toContain("Vendor change, full committee reaction");
+    expect(
+      within(captionPackage).getByTestId("caption-social").textContent,
+    ).toContain("Committee switch-up in clay form");
+
+    expect(within(panel).getByTestId("rights-record").textContent).toContain(
+      "rights-v1",
+    );
+
+    // The caption package ships the generated social caption as a
+    // downloadable text file next to the video.
+    const captionLink = screen.getByTestId("download-caption");
+    expect(captionLink.getAttribute("download")).toBe(
+      "yardtoonz-caption-prod-e52.txt",
+    );
+    expect(captionLink.getAttribute("href")).toContain(
+      encodeURIComponent("Committee switch-up in clay form"),
+    );
+  });
+
+  it("reports empty states when the social caption and rights record are missing", async () => {
+    installFetch(async () => jsonResponse(200, chainDetail()), {
+      attribution: makeAttribution({
+        socialCaption: null,
+        rightsConfirmation: null,
+        sourceUrl: null,
+      }),
+    });
+    renderMonitor();
+
+    const panel = await screen.findByTestId("attribution-panel");
+    expect(panel.textContent).toContain("No generated social caption yet");
+    expect(screen.getByTestId("rights-record-empty").textContent).toContain(
+      "No rights confirmation is recorded",
+    );
+    expect(panel.textContent).toContain("No source URL was recorded.");
+
+    // With no generated social caption the caption download falls back
+    // to the editorial source caption.
+    const captionLink = screen.getByTestId("download-caption");
+    expect(captionLink.getAttribute("href")).toContain(
+      encodeURIComponent("Vendor change, full committee reaction"),
+    );
+  });
+
+  it("shows an error state when the attribution lookup fails", async () => {
+    installFetch(async () => jsonResponse(200, chainDetail()), {
+      attributionFails: true,
+    });
+    renderMonitor();
+
+    await screen.findByRole("alert");
+    expect(screen.queryByTestId("attribution-panel")).toBeNull();
   });
 });
