@@ -149,6 +149,54 @@ export function buildArtifactLineage(
     );
 }
 
+export interface VisualChainStep {
+  readonly kind: ArtifactKind;
+  readonly label: string;
+  readonly artifactId: string;
+  readonly isVideo: boolean;
+}
+
+const visualChainOrder: readonly {
+  kind: ArtifactKind;
+  label: string;
+  isVideo: boolean;
+}[] = [
+  { kind: "KEYFRAME", label: "Keyframe", isVideo: false },
+  { kind: "STYLED_FRAME", label: "Clay frame", isVideo: false },
+  { kind: "SILENT_ANIMATION", label: "Animation", isVideo: true },
+  { kind: "FINAL_VIDEO", label: "Final", isVideo: true },
+];
+
+/**
+ * The keyframe → clay frame → animation → final strip, in pipeline order,
+ * one step per artifact kind actually present. Retried stages keep their
+ * latest artifact; absent kinds are skipped rather than drawn as
+ * placeholders (AGENTS.md: no invented state).
+ */
+export function buildVisualChain(
+  artifacts: readonly ProductionArtifactView[],
+): VisualChainStep[] {
+  const latestByKind = new Map<ArtifactKind, ProductionArtifactView>();
+  for (const artifact of artifacts) {
+    const existing = latestByKind.get(artifact.kind);
+    if (!existing || artifact.createdAt >= existing.createdAt) {
+      latestByKind.set(artifact.kind, artifact);
+    }
+  }
+  return visualChainOrder.flatMap((step) => {
+    const artifact = latestByKind.get(step.kind);
+    if (!artifact) return [];
+    return [
+      Object.freeze({
+        kind: step.kind,
+        label: step.label,
+        artifactId: artifact.id,
+        isVideo: step.isVideo,
+      }),
+    ];
+  });
+}
+
 export interface OutputFacts {
   readonly durationSeconds?: number;
   readonly width?: number;

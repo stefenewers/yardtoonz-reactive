@@ -7,6 +7,7 @@ import { humanizeProvider } from "@/domain/inbox";
 import {
   buildArtifactLineage,
   buildStageTimeline,
+  buildVisualChain,
   formatClockTime,
   formatSeconds,
   isJobActive,
@@ -124,6 +125,10 @@ export function JobOutput({
   );
   const lineage: LineageRow[] = useMemo(
     () => buildArtifactLineage(detail?.artifacts ?? []),
+    [detail?.artifacts],
+  );
+  const visualChain = useMemo(
+    () => buildVisualChain(detail?.artifacts ?? []),
     [detail?.artifacts],
   );
 
@@ -391,6 +396,39 @@ export function JobOutput({
                 {formatClockTime(artifact.createdAt)} · sha256{" "}
                 {artifact.sha256Prefix}…
               </small>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <h2>Visual chain</h2>
+      {visualChain.length === 0 ? (
+        <p className="empty-state" role="status">
+          Keyframe, clay frame, and animation previews appear here as stages
+          complete.
+        </p>
+      ) : (
+        <ol
+          className="visual-chain"
+          aria-label="Keyframe, clay frame, animation, and final video"
+        >
+          {visualChain.map((step) => (
+            <li key={step.kind} className="visual-chain-step">
+              {step.isVideo ? (
+                <video
+                  src={client.artifactUrl(production.id, step.artifactId)}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  aria-label={step.label}
+                />
+              ) : (
+                <img
+                  src={client.artifactUrl(production.id, step.artifactId)}
+                  alt={step.label}
+                />
+              )}
+              <span>{step.label}</span>
             </li>
           ))}
         </ol>

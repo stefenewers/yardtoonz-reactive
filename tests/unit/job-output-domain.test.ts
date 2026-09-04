@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildArtifactLineage,
   buildStageTimeline,
+  buildVisualChain,
   formatBytes,
   formatClockTime,
   formatSeconds,
@@ -167,5 +168,55 @@ describe("job-output domain", () => {
     expect(formatClockTime(undefined)).toBe("");
 
     expect(slowStageSeconds).toBeGreaterThan(0);
+  });
+});
+
+describe("buildVisualChain", () => {
+  it("orders the present media steps from keyframe to final video", () => {
+    const steps = buildVisualChain([
+      artifact({ id: "final-1", kind: "FINAL_VIDEO" }),
+      artifact({ id: "source-1", kind: "SOURCE_VIDEO" }),
+      artifact({ id: "key-1", kind: "KEYFRAME" }),
+      artifact({ id: "clay-1", kind: "STYLED_FRAME" }),
+      artifact({ id: "anim-1", kind: "SILENT_ANIMATION" }),
+      artifact({ id: "audio-1", kind: "EXTRACTED_AUDIO" }),
+    ] as never);
+
+    expect(steps.map((step) => step.label)).toEqual([
+      "Keyframe",
+      "Clay frame",
+      "Animation",
+      "Final",
+    ]);
+    expect(steps.map((step) => step.artifactId)).toEqual([
+      "key-1",
+      "clay-1",
+      "anim-1",
+      "final-1",
+    ]);
+    expect(steps.map((step) => step.isVideo)).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
+
+  it("keeps only the latest artifact per kind across retry attempts", () => {
+    const steps = buildVisualChain([
+      artifact({ id: "key-old", kind: "KEYFRAME", createdAt: T0 }),
+      artifact({ id: "key-new", kind: "KEYFRAME", createdAt: T1 }),
+    ] as never);
+
+    expect(steps.map((step) => step.artifactId)).toEqual(["key-new"]);
+  });
+
+  it("skips kinds that have no artifacts yet instead of placeholders", () => {
+    const steps = buildVisualChain([
+      artifact({ id: "key-1", kind: "KEYFRAME" }),
+      artifact({ id: "final-1", kind: "FINAL_VIDEO" }),
+    ] as never);
+
+    expect(steps.map((step) => step.artifactId)).toEqual(["key-1", "final-1"]);
   });
 });

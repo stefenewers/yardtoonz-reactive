@@ -480,6 +480,36 @@ describe("JobOutput", () => {
   });
 });
 
+function chainDetail() {
+  return makeDetail({
+    status: "COMPLETE",
+    detail: {
+      stages: STAGE_NAMES.map((name) =>
+        makeStage({ id: `stage-${name}`, name, status: "COMPLETE" }),
+      ),
+      artifacts: [
+        makeArtifact({ id: "prod-e52-source" }),
+        makeArtifact({
+          id: "prod-e52-key",
+          kind: "KEYFRAME",
+          provider: "MOCK",
+        }),
+        makeArtifact({
+          id: "prod-e52-clay",
+          kind: "STYLED_FRAME",
+          provider: "MOCK",
+        }),
+        makeArtifact({
+          id: "prod-e52-anim",
+          kind: "SILENT_ANIMATION",
+          provider: "MOCK",
+        }),
+        COMPLETE_FINAL_ARTIFACT,
+      ],
+    },
+  });
+}
+
 function failedDetail() {
   return makeDetail({
     status: "FAILED",
@@ -505,3 +535,28 @@ function failedDetail() {
     },
   });
 }
+
+describe("JobOutput visual chain", () => {
+  it("draws the visual chain from artifact lineage in pipeline order", async () => {
+    installFetch(async () => jsonResponse(200, chainDetail()));
+    renderMonitor();
+
+    const chain = await screen.findByLabelText(
+      "Keyframe, clay frame, animation, and final video",
+    );
+    const steps = Array.from(chain.querySelectorAll("li"));
+    expect(steps.map((step) => step.textContent)).toEqual([
+      "Keyframe",
+      "Clay frame",
+      "Animation",
+      "Final",
+    ]);
+    // Non-chain artifacts (source video) never appear in the strip.
+    expect(chain.textContent).not.toContain("Source video");
+    expect(
+      chain.querySelector(
+        'img[src="/api/productions/prod-e52/artifacts/prod-e52-key"]',
+      ),
+    ).not.toBeNull();
+  });
+});
