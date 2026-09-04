@@ -97,6 +97,18 @@ function completeProduction(): ProductionJob {
       height: 640,
       durationSeconds: segment.durationSeconds,
       audioPresent: true,
+      outputQa: {
+        factors: {
+          verticalDimensions: true,
+          audioPresent: true,
+          durationInRange: true,
+          framePreservation: true,
+          providerAttribution: true,
+          artifactLineage: true,
+          downloadReady: true,
+        },
+        passed: true,
+      },
     },
   });
 }
@@ -153,6 +165,18 @@ describe("production state machine", () => {
         height: 640,
         durationSeconds: segment.durationSeconds,
         audioPresent: true,
+        outputQa: {
+          factors: {
+            verticalDimensions: true,
+            audioPresent: true,
+            durationInRange: true,
+            framePreservation: true,
+            providerAttribution: true,
+            artifactLineage: true,
+            downloadReady: true,
+          },
+          passed: true,
+        },
       },
     });
     expect(job).toMatchObject({
