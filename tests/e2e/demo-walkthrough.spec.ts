@@ -1,6 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -10,8 +9,9 @@ import { mediaToolPaths } from "../../src/lib/media-tools";
 
 const execFileAsync = promisify(execFile);
 
-// This spec owns a seeded candidate that no other e2e spec touches, so the
-// shared demo database never carries one spec's approval into another's flow.
+// This spec owns the pinned demo candidate that no other e2e spec touches,
+// so the shared demo database never carries one spec's approval into
+// another's flow.
 const ownedCaption = "Fresh laundry meets the first sudden drop of rain.";
 const evidenceDir = path.join("test-results", "walkthrough");
 // Playwright always runs from the repo root (same cwd as global-setup),
@@ -24,13 +24,38 @@ interface CandidateSummary {
   status: "NEW" | "APPROVED" | "REJECTED";
 }
 
-interface ProbeOutput {
-  format: { duration: string };
-  streams: Array<{ codec_type?: string }>;
+interface DirectorTreatmentResponse {
+  treatment: {
+    id: string;
+    candidateId: string;
+    provider: "MOCK" | "OPENAI";
+    model?: string;
+    treatment: {
+      recommendedSegment: { startSeconds: number; endSeconds: number };
+      setupTimestamp: number;
+      payoffTimestamp: number;
+      adaptationConcept: string;
+      socialCaption: string;
+      confidence: number;
+    };
+  };
 }
 
-let fixtureDirectory: string;
-let fixturePath: string;
+interface QaReportResponse {
+  report: {
+    overallStatus: "PASS" | "WARN" | "FAIL";
+    score: number;
+    checks: Array<{ key: string; status: "PASS" | "WARN" | "FAIL" }>;
+  };
+}
+
+interface ProbeOutput {
+  format: { duration: string };
+  streams: Array<{ codec_type?: string; width?: number; height?: number }>;
+}
+
+let candidateId: string;
+let directorResponse: DirectorTreatmentResponse;
 let workerProcess: ChildProcess | undefined;
 let workerOutput = "";
 
@@ -76,39 +101,11 @@ async function stopWorker(): Promise<void> {
 }
 
 test.beforeAll(async () => {
-  // Fixture generation plus a cold npm spawn can outlast the default hook
-  // timeout; this sets the hook's own budget (Playwright 1.59 pattern).
+  // A cold npm spawn can outlast the default hook timeout; this sets the
+  // hook's own budget (Playwright 1.59 pattern).
   test.setTimeout(120_000);
 
   await mkdir(evidenceDir, { recursive: true });
-
-  // The authorized source fixture mirrors the runbook demo clip: a short MP4
-  // with a real audio stream, long enough for a valid 5-8 second segment.
-  fixtureDirectory = await mkdtemp(
-    path.join(tmpdir(), "yardtoonz-walkthrough-"),
-  );
-  fixturePath = path.join(fixtureDirectory, "authorized-source.mp4");
-  await execFileAsync(mediaToolPaths.ffmpeg, [
-    "-y",
-    "-f",
-    "lavfi",
-    "-i",
-    "testsrc=size=320x240:rate=24",
-    "-f",
-    "lavfi",
-    "-i",
-    "sine=frequency=523:sample_rate=44100",
-    "-t",
-    "6.3",
-    "-c:v",
-    "libx264",
-    "-pix_fmt",
-    "yuv420p",
-    "-c:a",
-    "aac",
-    "-shortest",
-    fixturePath,
-  ]);
 
   // The walkthrough exercises the real demo-day command, which must boot the
   // worker against the same local database and artifact root as the server.
@@ -141,16 +138,15 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   await stopWorker();
-  await rm(fixtureDirectory, { recursive: true, force: true });
 });
 
 test.use({ video: "on" });
 
-test("runbook walkthrough: approved candidate to approved, downloadable cartoon", async ({
+test("agentic walkthrough: nine demo beats to an approved, downloadable cartoon", async ({
   page,
   request,
 }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   await test.step("run the demo-day worker and confirm a fresh heartbeat", async () => {
     try {
       await expect
@@ -196,19 +192,18 @@ test("runbook walkthrough: approved candidate to approved, downloadable cartoon"
 
   await page.goto("/");
 
-  await test.step("import and seed the deterministic demo candidates", async () => {
+  await test.step("beat 1 — load ranked trend candidates", async () => {
     await page.getByRole("button", { name: "Load demo candidates" }).click();
     await expect(page.getByText("10 candidates")).toBeVisible();
     await page.screenshot({
-      path: path.join(evidenceDir, "01-inbox-seeded.png"),
+      path: path.join(evidenceDir, "01-inbox-ranked.png"),
       fullPage: true,
     });
-  });
 
-  await test.step("restore the owned candidate for repeatable runs", async () => {
-    // demo:reset is the demo-day way to restore this state between full runs;
-    // inside the shared parallel suite the equivalent safe move is restoring
-    // only this spec's candidate so a CI retry starts from the same state.
+    // Restore the owned candidate for repeatable runs. demo:reset is the
+    // demo-day way to restore this state between full runs; inside the
+    // shared parallel suite the equivalent safe move is restoring only
+    // this spec's candidate so a CI retry starts from the same state.
     const listResponse = await request.get("/api/candidates");
     expect(listResponse.ok()).toBe(true);
     const list = (await listResponse.json()) as {
@@ -221,38 +216,118 @@ test("runbook walkthrough: approved candidate to approved, downloadable cartoon"
       owned,
       "seeded demo candidates should include the owned caption",
     ).toBeTruthy();
-    if (owned && owned.status !== "NEW") {
-      const restore = await request.patch(`/api/candidates/${owned.id}`, {
+    candidateId = owned!.id;
+    if (owned!.status !== "NEW") {
+      const restore = await request.patch(`/api/candidates/${candidateId}`, {
         data: { status: "NEW" },
       });
       expect(restore.ok()).toBe(true);
       await page.reload();
+      await page.getByRole("button", { name: "Load demo candidates" }).click();
       await expect(page.getByText("10 candidates")).toBeVisible();
     }
-  });
 
-  await test.step("evaluate the candidate and approve it for production", async () => {
-    await page.getByRole("button", { name: new RegExp(ownedCaption) }).click();
+    // The wow-layer one-click action lands on the pinned walkthrough
+    // candidate with its owner-cleared source clip.
+    await page.getByRole("button", { name: "Use demo candidate" }).click();
     await expect(
       page.getByRole("heading", { name: ownedCaption }),
     ).toBeVisible();
-    await expect(
-      page.getByText("Viral momentum", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Humor response", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Yard Toonz fit", { exact: true }),
-    ).toBeVisible();
 
+    // The Control Center reads the persisted trace: intake recorded the
+    // Trend Scout and Humor Analyst as COMPLETE with evidence in the same
+    // transaction that created the candidate.
+    const cards = page.getByRole("list", { name: "Agent cards" });
+    await expect(
+      cards.getByRole("listitem", { name: "Trend Scout: Complete" }),
+    ).toBeVisible();
+    await expect(
+      cards.getByRole("listitem", { name: "Humor Analyst: Complete" }),
+    ).toBeVisible();
+    await expect(
+      cards.getByRole("listitem", { name: "YardToonz Director: Waiting" }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: path.join(evidenceDir, "02-control-center-intake.png"),
+      fullPage: true,
+    });
+  });
+
+  await test.step("beat 2 — open the candidate and run the laughter evidence analysis", async () => {
+    await page.getByRole("button", { name: "Run the humor analysis" }).click();
+    const panel = page.locator(".analyst-panel");
+    await expect(
+      panel.locator("dl > div").filter({ hasText: "Corpus" }),
+    ).toContainText("10 comments");
+    await expect(
+      panel.locator("dl > div").filter({ hasText: "Coverage" }),
+    ).toContainText("of comments carried laughter");
+    await expect(panel.getByText("Evidence read only")).toBeVisible();
+    await page.screenshot({
+      path: path.join(evidenceDir, "03-humor-analysis.png"),
+      fullPage: true,
+    });
+  });
+
+  await test.step("beat 3 — ask the Director Agent for a treatment", async () => {
+    // The demo operator asks the Director through its API; the persisted,
+    // idempotent create-or-get treatment is the demo spine's handoff.
+    const treatmentResponse = await request.post("/api/director/treatments", {
+      data: { candidateId },
+    });
+    expect(treatmentResponse.ok()).toBe(true);
+    const created =
+      (await treatmentResponse.json()) as DirectorTreatmentResponse;
+    expect(created.treatment.provider).toBe("MOCK");
+    expect(created.treatment.candidateId).toBe(candidateId);
+    directorResponse = created;
+
+    // The Control Center picks up the persisted run: decision, confidence,
+    // provider, and model are attributed on the card.
+    const cards = page.getByRole("list", { name: "Agent cards" });
+    const directorCard = cards.getByRole("listitem", {
+      name: "YardToonz Director: Complete",
+    });
+    await expect(directorCard).toBeVisible({ timeout: 15_000 });
+    await expect(
+      directorCard.getByText(created.treatment.treatment.adaptationConcept),
+    ).toBeVisible();
+    await expect(
+      directorCard
+        .locator("dl.agent-attribution > div")
+        .filter({ hasText: "Model" }),
+    ).toContainText(created.treatment.model!);
+    await expect(
+      directorCard
+        .locator("dl.agent-attribution > div")
+        .filter({ hasText: "Provider" }),
+    ).toContainText("Mock");
+
+    // The Director's completion visibly hands off to the human gate.
+    await expect(page.getByText("Media generation is gated.")).toBeVisible();
+
+    // A refresh shows the same persisted history, never a blank slate.
+    await page.reload();
+    await page.getByRole("button", { name: "Load demo candidates" }).click();
+    await expect(page.getByText("10 candidates")).toBeVisible();
+    await page.getByRole("button", { name: "Use demo candidate" }).click();
+    await expect(
+      page.getByRole("list", { name: "Agent cards" }).getByRole("listitem", {
+        name: "YardToonz Director: Complete",
+      }),
+    ).toBeVisible({ timeout: 15_000 });
+    await page.screenshot({
+      path: path.join(evidenceDir, "04-director-treatment.png"),
+      fullPage: true,
+    });
+  });
+
+  await test.step("beat 5 — pass the rights-confirmation hard gate", async () => {
     await page.getByRole("button", { name: "Approve for production" }).click();
     await expect(
       page.getByRole("heading", { name: "Confirm source rights" }),
     ).toBeVisible();
-  });
 
-  await test.step("pass the rights-confirmation hard gate", async () => {
     const continueButton = page.getByRole("button", {
       name: "Confirm rights and continue",
     });
@@ -271,44 +346,57 @@ test("runbook walkthrough: approved candidate to approved, downloadable cartoon"
       page.getByText("Linked to the persisted candidate confirmation."),
     ).toBeVisible();
     await page.screenshot({
-      path: path.join(evidenceDir, "02-rights-confirmed.png"),
+      path: path.join(evidenceDir, "05-rights-confirmed.png"),
       fullPage: true,
     });
   });
 
-  await test.step("upload the authorized source and pick a valid segment", async () => {
-    const startButton = page.getByRole("button", { name: "Start production" });
-    await expect(startButton).toBeDisabled();
+  await test.step("beat 4 — accept the Director's recommended segment", async () => {
+    const recommended = directorResponse.treatment.treatment.recommendedSegment;
+    await expect(page.getByLabel("Start (seconds)")).toHaveValue(
+      String(recommended.startSeconds),
+    );
+    await expect(page.getByLabel("End (seconds)")).toHaveValue(
+      String(recommended.endSeconds),
+    );
+
+    // Setup/payoff markers render only when the treatment reached the
+    // setup screen, so their presence is the visible prefill proof.
     await expect(
-      page.getByText("Upload the authorized source MP4 to continue."),
+      page.getByRole("img", { name: /Setup and payoff markers/ }),
     ).toBeVisible();
-
-    await page
-      .getByLabel("Authorized source clip (MP4)")
-      .setInputFiles(fixturePath);
-
-    // The probed facts are server-side evidence, not client decoration.
-    await expect(page.getByText("6.3s")).toBeVisible();
-    await expect(page.getByText("Present", { exact: true })).toBeVisible();
-    await expect(startButton).toBeEnabled();
-
-    const endInput = page.getByLabel("End (seconds)");
-    await endInput.fill("9");
     await expect(
-      page.getByText(/at most 8 seconds long/).first(),
+      page.getByText(
+        new RegExp(
+          `Setup at ${directorResponse.treatment.treatment.setupTimestamp.toFixed(1)}s, payoff at ${directorResponse.treatment.treatment.payoffTimestamp.toFixed(1)}s`,
+        ),
+      ),
     ).toBeVisible();
-    await expect(startButton).toBeDisabled();
-    await endInput.fill("6");
-    await expect(startButton).toBeEnabled();
+    await expect(page.getByLabel("Creative direction (optional)")).toHaveValue(
+      directorResponse.treatment.treatment.adaptationConcept,
+    );
 
+    // One click loads the committed owner-cleared 6-second fixture.
+    await page.getByRole("button", { name: "Use demo clip" }).click();
+    const facts = page.locator('dl[aria-label="Probed source facts"]');
+    await expect(facts).toContainText("6.0s");
+    await expect(facts).toContainText("360 × 640");
+    await expect(facts).toContainText("Present");
+    await expect(
+      page.getByText(/Segment 0\.0s\u20136\.0s \(6\.0s\) selected\./),
+    ).toBeVisible();
     await page.screenshot({
-      path: path.join(evidenceDir, "03-upload-segment.png"),
+      path: path.join(evidenceDir, "06-segment-prefilled.png"),
       fullPage: true,
     });
   });
 
-  await test.step("queue the mock job and hand over to the job monitor", async () => {
-    await page.getByRole("button", { name: "Start production" }).click();
+  let previewSrc: string | null;
+
+  await test.step("queue the mock job on the real worker", async () => {
+    const startButton = page.getByRole("button", { name: "Start production" });
+    await expect(startButton).toBeEnabled();
+    await startButton.click();
 
     await expect(
       page.getByRole("heading", { name: "Job monitor" }),
@@ -317,59 +405,130 @@ test("runbook walkthrough: approved candidate to approved, downloadable cartoon"
     await expect(page.getByText("Image provider").locator("..")).toContainText(
       "Mock",
     );
+
+    // Media generation is queued behind the human gate; the QA Inspector
+    // owns the last pipeline stage and is still waiting at queue time.
     await expect(
-      page.getByText("Animation provider").locator(".."),
-    ).toContainText("Mock");
+      page
+        .getByRole("list", { name: "Agent cards" })
+        .getByRole("listitem", { name: "QA Inspector: Waiting" }),
+    ).toBeVisible();
     await page.screenshot({
-      path: path.join(evidenceDir, "04-job-queued.png"),
+      path: path.join(evidenceDir, "07-job-queued.png"),
       fullPage: true,
     });
   });
 
-  await test.step("worker drives every stage to completion", async () => {
+  await test.step("beat 6 — watch the agent timeline run the media agents", async () => {
     // The worker claims one stage per poll tick, so the full mock pipeline
     // takes several seconds; the monitor polls every 3 seconds meanwhile.
     await expect(page.getByText(/^COMPLETE/)).toBeVisible({
       timeout: 150_000,
     });
+    const cards = page.getByRole("list", { name: "Agent cards" });
+    await expect(
+      cards.getByRole("listitem", { name: "Clay Artist: Complete" }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      cards.getByRole("listitem", { name: "Animator: Complete" }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      cards.getByRole("listitem", { name: "QA Inspector: Complete" }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      cards
+        .getByRole("listitem", { name: "Clay Artist: Complete" })
+        .locator("dl.agent-attribution > div")
+        .filter({ hasText: "Provider" }),
+    ).toContainText("Mock");
+    await expect(
+      cards
+        .getByRole("listitem", { name: "Animator: Complete" })
+        .locator("dl.agent-attribution > div")
+        .filter({ hasText: "Provider" }),
+    ).toContainText("Mock");
+    await expect(page.getByText("Every media agent finished")).toBeVisible();
+    await page.screenshot({
+      path: path.join(evidenceDir, "08-agent-timeline.png"),
+      fullPage: true,
+    });
+  });
+
+  await test.step("beat 7 — see the original frame become claymation", async () => {
+    const chain = page.getByRole("list", {
+      name: "Keyframe, clay frame, animation, and final video",
+    });
+    await expect(chain).toBeVisible();
+    await expect(chain.getByRole("listitem")).toHaveCount(4);
+
+    const beforeAfter = page.getByTestId("before-after");
+    await expect(beforeAfter).toBeVisible();
+    await expect(
+      beforeAfter.getByText("Before · source keyframe"),
+    ).toBeVisible();
+    await expect(beforeAfter.getByText("After · clay frame")).toBeVisible();
+    await page.screenshot({
+      path: path.join(evidenceDir, "09-claymation-reveal.png"),
+      fullPage: true,
+    });
+  });
+
+  await test.step("beat 8 — preview the animated output with original audio", async () => {
     await expect(
       page.getByRole("heading", { name: "Output review" }),
     ).toBeVisible();
+    await expect(
+      page.getByText(/^6\.\ds$/),
+      "the probed output duration should be 6.0–6.9 seconds",
+    ).toBeVisible();
+
+    const facts = page.locator('dl[aria-label="Output facts"]');
+    await expect(facts).toContainText("360 × 640");
+    await expect(facts).toContainText("H264");
+    await expect(facts).toContainText("Present");
 
     const lineage = page.getByRole("list", {
       name: "Artifact lineage from source to final video",
     });
     await expect(lineage.getByRole("listitem")).toHaveCount(7);
 
-    await expect(page.getByText(/^6\.\ds$/)).toBeVisible();
-    await expect(page.getByText("Present", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("output-preview")).toBeVisible();
-    await page.screenshot({
-      path: path.join(evidenceDir, "05-output-complete.png"),
-      fullPage: true,
-    });
-  });
-
-  await test.step("preview streams the final video artifact", async () => {
-    const previewSrc = await page
-      .getByTestId("output-preview")
-      .getAttribute("src");
+    previewSrc = await page.getByTestId("output-preview").getAttribute("src");
     expect(previewSrc).toBeTruthy();
     const previewResponse = await page.request.get(previewSrc!);
     expect(previewResponse.ok()).toBe(true);
     expect(previewResponse.headers()["content-type"]).toContain("video/mp4");
-  });
-
-  await test.step("record the human output approval", async () => {
-    await page.getByRole("button", { name: "Approve output" }).click();
-    await expect(page.getByText("Output approved")).toBeVisible();
     await page.screenshot({
-      path: path.join(evidenceDir, "06-output-approved.png"),
+      path: path.join(evidenceDir, "10-output-preview.png"),
       fullPage: true,
     });
   });
 
-  await test.step("download the MP4 and prove it is a playable cartoon", async () => {
+  await test.step("beat 9 — approve and download video + caption package", async () => {
+    await page.getByRole("button", { name: "Approve output" }).click();
+    await expect(page.getByText("Output approved")).toBeVisible();
+    await page.screenshot({
+      path: path.join(evidenceDir, "11-output-approved.png"),
+      fullPage: true,
+    });
+
+    // The QA Inspector's persisted report: the deterministic checks
+    // registry judges the production, and nothing may FAIL.
+    const productionId = /\/api\/productions\/([^/]+)\/artifacts\//.exec(
+      previewSrc!,
+    )?.[1];
+    expect(productionId, "preview URL should name the production").toBeTruthy();
+    const qaResponse = await request.post(
+      `/api/productions/${productionId}/qa-report`,
+    );
+    expect(qaResponse.ok()).toBe(true);
+    const qa = (await qaResponse.json()) as QaReportResponse;
+    expect(
+      qa.report.checks.every((check) => check.status !== "FAIL"),
+      `QA report should have no failing checks: ${JSON.stringify(qa.report.checks)}`,
+    ).toBe(true);
+    expect(qa.report.score).toBeGreaterThanOrEqual(90);
+
+    // Download the MP4 and prove it is a playable 9:16 cartoon.
     const downloadPromise = page.waitForEvent("download");
     await page.getByTestId("download-final").click();
     const download = await downloadPromise;
@@ -394,8 +553,44 @@ test("runbook walkthrough: approved candidate to approved, downloadable cartoon"
     const durationSeconds = Number.parseFloat(parsed.format.duration);
     expect(durationSeconds).toBeGreaterThanOrEqual(5.5);
     expect(durationSeconds).toBeLessThanOrEqual(6.5);
+    const videoStream = parsed.streams.find(
+      (stream) => stream.codec_type === "video",
+    );
+    expect(videoStream?.width).toBe(360);
+    expect(videoStream?.height).toBe(640);
     expect(parsed.streams.some((stream) => stream.codec_type === "audio")).toBe(
       true,
     );
+
+    // The caption package ships the Director's social caption.
+    const captionPromise = page.waitForEvent("download");
+    await page.getByTestId("download-caption").click();
+    const captionDownload = await captionPromise;
+    expect(captionDownload.suggestedFilename()).toBe(
+      `yardtoonz-caption-${productionId}.txt`,
+    );
+    const captionPath = path.join(evidenceDir, "downloaded-caption.txt");
+    await captionDownload.saveAs(captionPath);
+    const captionText = await readFile(captionPath, "utf8");
+    expect(captionText).toBe(
+      directorResponse.treatment.treatment.socialCaption,
+    );
+
+    // Attribution and the rights record ship with the output view.
+    const attribution = page.getByTestId("attribution-panel");
+    await expect(attribution).toBeVisible();
+    await expect(
+      attribution.getByText("Authorized demo contributor"),
+    ).toBeVisible();
+    await expect(page.getByTestId("caption-social")).toHaveText(
+      directorResponse.treatment.treatment.socialCaption,
+    );
+    await expect(page.getByTestId("rights-record")).toContainText(
+      "text version 2026-09-03",
+    );
+    await page.screenshot({
+      path: path.join(evidenceDir, "12-caption-package.png"),
+      fullPage: true,
+    });
   });
 });
