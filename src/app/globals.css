@@ -1920,6 +1920,10 @@ input:focus-visible {
 .agent-card {
   display: flex;
   flex-direction: column;
+  /* Grid items default to min-width: auto; without 0 an unbreakable
+     fingerprint inside a card expands its auto-fill track past the
+     viewport (horizontal page scroll on mid-size screens). */
+  min-width: 0;
   gap: 0.7rem;
   padding: 0.9rem 1rem 1rem;
   border: 1px solid var(--line);
@@ -2059,6 +2063,9 @@ input:focus-visible {
   gap: 0.6rem;
   padding: 0.2rem 0;
   border-bottom: 1px dashed rgb(255 249 232 / 10%);
+  /* Evidence values include 64-character SHA-256 fingerprints; let them
+     break instead of forcing the row (and the grid track) wider. */
+  overflow-wrap: anywhere;
 }
 
 .agent-evidence li span {
@@ -2075,6 +2082,11 @@ input:focus-visible {
 
 .agent-artifacts a {
   color: var(--accent);
+}
+
+/* Artifact ids (prod_…) are single unbreakable tokens. */
+.agent-artifacts code {
+  overflow-wrap: anywhere;
 }
 
 .handoff-banner {
