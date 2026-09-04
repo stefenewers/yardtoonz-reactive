@@ -319,13 +319,21 @@ describe("JobOutput", () => {
     const links = Array.from(lineage.querySelectorAll("a"));
     expect(links.map((link) => link.textContent)).toEqual([
       "Source video",
+      "Details",
       "Final video",
+      "Details",
     ]);
     expect(links[0]?.getAttribute("href")).toBe(
       "/api/productions/prod-e52/artifacts/prod-e52-source",
     );
     expect(links[1]?.getAttribute("href")).toBe(
+      "/lineage?production=prod-e52&artifact=prod-e52-source",
+    );
+    expect(links[2]?.getAttribute("href")).toBe(
       "/api/productions/prod-e52/artifacts/prod-e52-final",
+    );
+    expect(links[3]?.getAttribute("href")).toBe(
+      "/lineage?production=prod-e52&artifact=prod-e52-final",
     );
     expect(lineage.textContent).toContain(SHA.slice(0, 12));
     expect(lineage.textContent).toContain("FFmpeg");

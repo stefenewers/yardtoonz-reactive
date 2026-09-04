@@ -2267,3 +2267,170 @@ input:focus-visible {
     overflow-x: auto;
   }
 }
+
+/* Lineage explorer — the exploration view over artifact lineage. */
+
+.lineage-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.lineage-state-banner {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  margin: 0.75rem 0 1.25rem;
+  padding: 0.75rem 1rem;
+}
+
+.lineage-state-banner p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0;
+}
+
+.lineage-state-banner--complete {
+  border-color: rgb(74 222 128 / 45%);
+}
+
+.lineage-state-banner--failed {
+  border-color: rgb(248 113 113 / 45%);
+}
+
+.lineage-state-banner--sparse {
+  border-color: rgb(250 204 21 / 40%);
+}
+
+.lineage-chain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0.5rem 0 1.25rem;
+  padding: 0;
+}
+
+.lineage-stage {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.75rem;
+  position: relative;
+}
+
+.lineage-stage:not(:first-child)::before {
+  color: var(--text-muted);
+  content: "→";
+  left: -0.9rem;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.lineage-stage-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+}
+
+.lineage-nodes {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lineage-node {
+  background: rgb(7 6 5 / 25%);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.lineage-node strong {
+  font-size: 0.9rem;
+}
+
+.lineage-node small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.lineage-node:hover {
+  border-color: var(--text-muted);
+}
+
+.lineage-node--selected {
+  border-color: var(--accent, #f4a825);
+  box-shadow: 0 0 0 1px var(--accent, #f4a825);
+}
+
+.lineage-node--superseded {
+  opacity: 0.7;
+}
+
+.lineage-node-flag {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.inspector-panel {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem;
+}
+
+.inspector-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.inspector-header h2 {
+  margin: 0;
+}
+
+.inspector-preview {
+  background: rgb(7 6 5 / 25%);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  margin: 0.75rem 0;
+  max-height: 20rem;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.inspector-mono {
+  font-family: var(--font-mono, monospace);
+  overflow-wrap: anywhere;
+}
+
+.inspector-no-preview {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 700px) {
+  .lineage-chain {
+    flex-direction: column;
+  }
+
+  .lineage-stage:not(:first-child)::before {
+    content: "↓";
+    left: 50%;
+    top: -1.1rem;
+  }
+}
