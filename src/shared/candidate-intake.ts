@@ -45,7 +45,23 @@ export const candidateIntakeResultSchema = z
   })
   .readonly();
 
-export const candidateImportSources = ["CSV", "SEEDED"] as const;
+/**
+ * Manual intake: the operator pastes a social post URL as a source
+ * reference. Nothing is ever fetched from the platform — the URL is stored
+ * verbatim and only hand-supplied editorial fields travel with it.
+ */
+export const manualCandidateIntakeSchema = z
+  .object({
+    url: z.url().trim(),
+    platform: z.enum(sourcePlatforms),
+    caption: z.string().trim().min(1),
+    sourceLabel: z.string().trim().min(1).optional(),
+    metrics: engagementMetricsSchema.optional(),
+  })
+  .strict()
+  .readonly();
+
+export const candidateImportSources = ["CSV", "SEEDED", "MANUAL"] as const;
 
 export const importCandidatesRequestSchema = z
   .discriminatedUnion("source", [
@@ -53,6 +69,12 @@ export const importCandidatesRequestSchema = z
       .object({ source: z.literal("CSV"), csv: z.string().trim().min(1) })
       .strict(),
     z.object({ source: z.literal("SEEDED") }).strict(),
+    z
+      .object({
+        source: z.literal("MANUAL"),
+        candidate: manualCandidateIntakeSchema,
+      })
+      .strict(),
   ])
   .readonly();
 
@@ -63,6 +85,7 @@ export const importCandidatesResponseSchema = z
 export type CandidateIntakeProviderKind = z.infer<
   typeof candidateIntakeProviderKindSchema
 >;
+export type ManualCandidateIntake = z.infer<typeof manualCandidateIntakeSchema>;
 export type CandidateIntakeRecord = z.infer<typeof candidateIntakeRecordSchema>;
 export type CandidateIntakeResult = z.infer<typeof candidateIntakeResultSchema>;
 export type CandidateImportSource = (typeof candidateImportSources)[number];

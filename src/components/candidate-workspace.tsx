@@ -21,6 +21,7 @@ import { DemoActions } from "@/components/demo-actions";
 import { demoCandidateId } from "@/shared/demo";
 
 import { ProductionSetup } from "@/components/production-setup";
+import { ManualIntakeAction } from "@/components/manual-intake-action";
 import { ScoutHeaderAction } from "@/components/scout-header-action";
 
 type Screen = "inbox" | "review" | "rights" | "upload";
@@ -272,6 +273,7 @@ export function CandidateWorkspace({
             Diagnostics
           </a>
           <ScoutHeaderAction onImported={() => loadCandidates()} />
+          <ManualIntakeAction onImported={() => loadCandidates()} />
         </div>
       </header>
 

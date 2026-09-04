@@ -4,8 +4,10 @@ import { apiError, invalidRequest } from "@/server/api-response";
 import {
   CandidateIntakeError,
   createCsvCandidateIntakeProvider,
+  createManualCandidateIntakeProvider,
   createSeededCandidateIntakeProvider,
   importCandidates,
+  pastedUrlToIntakeRecord,
 } from "@/server/candidates/intake";
 import { getCandidateRepository } from "@/server/candidates/service";
 import {
@@ -27,7 +29,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     const provider =
       input.source === "CSV"
         ? createCsvCandidateIntakeProvider(input.csv)
-        : createSeededCandidateIntakeProvider();
+        : input.source === "MANUAL"
+          ? createManualCandidateIntakeProvider(
+              pastedUrlToIntakeRecord({
+                pasted: input.candidate,
+                now: new Date().toISOString(),
+              }),
+            )
+          : createSeededCandidateIntakeProvider();
 
     const result = importCandidates({
       provider,
