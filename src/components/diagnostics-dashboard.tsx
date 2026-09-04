@@ -123,7 +123,10 @@ export function DiagnosticsDashboard({
         </div>
       ) : (
         <>
-          <p className="diagnostics-refresh" data-testid="diagnostics-refreshed">
+          <p
+            className="diagnostics-refresh"
+            data-testid="diagnostics-refreshed"
+          >
             {refreshedAt
               ? `Refreshed ${new Date(refreshedAt).toLocaleTimeString()}`
               : "Awaiting first refresh"}
@@ -132,8 +135,8 @@ export function DiagnosticsDashboard({
           <h2 className="visually-hidden-title">Credential fail-fast gates</h2>
           <p className="diagnostics-note">
             Live provider selections fail fast at job creation when a required
-            credential setting is missing. Setting names are shown; values
-            never leave the server.
+            credential setting is missing. Setting names are shown; values never
+            leave the server.
           </p>
           <div className="diagnostics-gate-grid">
             {view.gates.map((gate) => (
@@ -209,9 +212,9 @@ export function DiagnosticsDashboard({
                     Status {card.status} · attempt {card.attempt}
                   </p>
                   <p>
-                    {card.artifactCount} artifacts —{" "}
-                    {card.liveAttributedCount} attributed, {card.localCount}{" "}
-                    local, {card.unattributedLiveCount} unattributed
+                    {card.artifactCount} artifacts — {card.liveAttributedCount}{" "}
+                    attributed, {card.localCount} local,{" "}
+                    {card.unattributedLiveCount} unattributed
                   </p>
                   {card.environmentStillServable ? null : (
                     <p className="diagnostics-warning">

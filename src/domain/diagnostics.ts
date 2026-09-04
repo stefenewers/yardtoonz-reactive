@@ -100,8 +100,8 @@ export function buildCredentialGateStates(
     const missingSettings = requiredSettings.filter(
       (setting) => !environment.credentials[setting],
     );
-    const presentSettings = requiredSettings.filter((setting) =>
-      environment.credentials[setting],
+    const presentSettings = requiredSettings.filter(
+      (setting) => environment.credentials[setting],
     );
 
     const outcome: CredentialGateOutcome = !isLive
@@ -155,7 +155,8 @@ export function buildProviderStatusCards(
 ): ProviderStatusCard[] {
   return jobs.map((job) => {
     const live = job.artifacts.filter(
-      (artifact) => artifact.provider === "OPENAI" || artifact.provider === "RUNWAY",
+      (artifact) =>
+        artifact.provider === "OPENAI" || artifact.provider === "RUNWAY",
     );
     const liveAttributedCount = live.filter(
       (artifact) => artifact.providerRequestId !== undefined,

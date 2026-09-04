@@ -7,10 +7,7 @@ import {
   directorProviders,
   imageProviders,
 } from "../lib/providers";
-import {
-  productionStageNames,
-  productionStageStatuses,
-} from "./productions";
+import { productionStageNames, productionStageStatuses } from "./productions";
 
 /**
  * Public contract for the provider diagnostics snapshot (`GET /api/diagnostics`).

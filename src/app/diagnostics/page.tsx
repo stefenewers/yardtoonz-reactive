@@ -17,8 +17,8 @@ export default function DiagnosticsPage() {
         <h1>Provider diagnostics</h1>
         <p className="lede">
           Live view of provider selections, credential readiness, artifact
-          attribution, and request-ID lineage. Credential values never leave
-          the server — only their presence is reported.
+          attribution, and request-ID lineage. Credential values never leave the
+          server — only their presence is reported.
         </p>
       </header>
       <DiagnosticsDashboard />
