@@ -32,7 +32,15 @@ function jsonResponse(status: number, body: unknown): Response {
 function installFetch(
   handler: (url: string, init: RequestInit | undefined) => Promise<Response>,
 ) {
-  const fetchMock = vi.fn(handler);
+  // The embedded agent-trace monitor polls its own API; route those calls
+  // to an empty trace so job assertions stay focused on the monitor.
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/api/agent-trace")) {
+      return Promise.resolve(jsonResponse(200, { runs: [] }));
+    }
+    return handler(url, init);
+  });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -448,10 +456,13 @@ describe("JobOutput", () => {
 
     fetchMock.mockImplementation(async (url, init) => {
       const method = init?.method ?? "GET";
+      if (String(url).includes("/api/agent-trace")) {
+        return jsonResponse(200, { runs: [] });
+      }
       if (url === "/api/productions/prod-e52") {
         return jsonResponse(200, completeDetail());
       }
-      throw new Error(`Unexpected request: ${method} ${url}`);
+      throw new Error(`Unexpected request: ${method} ${String(url)}`);
     });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await screen.findByRole("heading", { name: "Job monitor" });

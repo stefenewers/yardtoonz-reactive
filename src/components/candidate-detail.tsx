@@ -10,6 +10,7 @@ import {
   type ScoreEvidence,
 } from "@/domain/candidate";
 import { overallWeightingSummary, platformLabels } from "@/domain/inbox";
+import { AgentTraceMonitor } from "@/components/agent-trace-monitor";
 
 import { AnalystPanel } from "./analyst-panel";
 
@@ -292,6 +293,7 @@ export function CandidateDetail({
           />
         </aside>
       </div>
+      <AgentTraceMonitor candidateId={candidate.id} />
     </section>
   );
 }

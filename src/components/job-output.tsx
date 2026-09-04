@@ -17,6 +17,7 @@ import {
 } from "@/domain/job-output";
 import { createApiProductionClient } from "@/lib/production-client";
 import type { ProductionDetailResponse } from "@/shared/productions";
+import { AgentTraceMonitor } from "@/components/agent-trace-monitor";
 
 const pollIntervalMs = 3000;
 
@@ -354,6 +355,16 @@ export function JobOutput({
           </li>
         ))}
       </ol>
+
+      <AgentTraceMonitor
+        productionId={production.id}
+        productionStatus={production.status}
+        activeStage={production.activeStage}
+        artifactHref={(artifactId) =>
+          client.artifactUrl(production.id, artifactId)
+        }
+        headingId="job-agent-center-title"
+      />
 
       <h2>Artifact lineage</h2>
       {lineage.length === 0 ? (
