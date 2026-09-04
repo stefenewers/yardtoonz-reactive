@@ -15,6 +15,7 @@ import {
   agentRunProviders,
   agentRunStates,
 } from "@/domain/agent-trace";
+import { qaOverallStatuses } from "@/domain/qa-report";
 
 import { orchestrationRunStatuses } from "@/shared/orchestration";
 
@@ -522,6 +523,45 @@ export const commentAnalyses = sqliteTable(
   ],
 );
 
+/**
+ * Persisted QA Inspector reports. One row per inspection run: a report is
+ * an observation with a timestamp, so repeats append history instead of
+ * overwriting — the latest row is the demo's current QA verdict. The checks
+ * JSON is the deterministic runner's results over the production's persisted
+ * artifact facts at inspection time, stamped with the runner version so
+ * stored reports stay interpretable as check semantics evolve.
+ */
+export const qaReports = sqliteTable(
+  "qa_reports",
+  {
+    id: text("id").primaryKey(),
+    productionId: text("production_id")
+      .notNull()
+      .references(() => productions.id, { onDelete: "cascade" }),
+    candidateId: text("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    runnerVersion: text("runner_version").notNull(),
+    overallStatus: text("overall_status", {
+      enum: qaOverallStatuses,
+    }).notNull(),
+    score: integer("score").notNull(),
+    checksJson: text("checks_json").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (table) => [
+    index("qa_reports_production_id_idx").on(table.productionId),
+    check(
+      "qa_reports_overall_status_valid",
+      sql`${table.overallStatus} IN ('PASS', 'WARN', 'FAIL')`,
+    ),
+    check(
+      "qa_reports_score_bounds",
+      sql`${table.score} >= 0 AND ${table.score} <= 100`,
+    ),
+  ],
+);
+
 export const candidateRelations = relations(candidates, ({ many, one }) => ({
   comments: many(candidateComments),
   editorialDecisions: many(editorialDecisions),
@@ -608,6 +648,17 @@ export const agentRunRelations = relations(agentRuns, ({ one }) => ({
   }),
   production: one(productions, {
     fields: [agentRuns.productionId],
+    references: [productions.id],
+  }),
+}));
+
+export const qaReportRelations = relations(qaReports, ({ one }) => ({
+  candidate: one(candidates, {
+    fields: [qaReports.candidateId],
+    references: [candidates.id],
+  }),
+  production: one(productions, {
+    fields: [qaReports.productionId],
     references: [productions.id],
   }),
 }));

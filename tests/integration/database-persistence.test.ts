@@ -143,6 +143,7 @@ describe("SQLite persistence", () => {
       "orchestration_runs",
       "production_stages",
       "productions",
+      "qa_reports",
       "rights_confirmations",
       "storyboards",
       "worker_heartbeats",
