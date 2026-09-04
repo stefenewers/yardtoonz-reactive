@@ -1,8 +1,5 @@
 import type { AnimationProvider, ImageProvider } from "@/lib/providers";
-import {
-  outputQaFactorKeys,
-  type ValidationReport,
-} from "@/domain/production";
+import { outputQaFactorKeys, type ValidationReport } from "@/domain/production";
 import { SCORING_VERSION } from "@/domain/scoring";
 import type { EngagementMetrics } from "@/shared/candidates";
 
