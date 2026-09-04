@@ -57,7 +57,10 @@ function describeFailure(error: unknown): StageFailure {
   if (error instanceof WorkerStageError) {
     return {
       errorCode: error.code,
-      safeErrorMessage: "A media processing step failed for this stage.",
+      // Throwers opt into a specific operator-facing message via
+      // safeMessage; otherwise the bounded generic copy stands.
+      safeErrorMessage:
+        error.safeMessage ?? "A media processing step failed for this stage.",
       errorDetail: error.message,
     };
   }
@@ -396,6 +399,15 @@ export async function runWorkerTick(input: WorkerTickInput): Promise<void> {
       creativeDirection: state.production.creativeDirection,
       claymationPrompt: state.treatmentPrompts.claymationPrompt,
       motionPrompt: state.treatmentPrompts.motionPrompt,
+      imageProvider: state.production.imageProvider,
+      animationProvider: state.production.animationProvider,
+      productionArtifacts: state.artifactRows.map((row) => ({
+        kind: row.kind,
+        provider: row.provider,
+        byteSize: row.byteSize,
+        sha256: row.sha256,
+        storageKey: row.storageKey,
+      })),
       priorProviderRequestId: findPriorProviderRequestId(state, stage),
       recordProviderRequestId: async (requestId) =>
         repository.recordStageProviderRequestId({
