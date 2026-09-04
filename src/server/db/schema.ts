@@ -16,6 +16,8 @@ import {
   agentRunStates,
 } from "@/domain/agent-trace";
 
+import { orchestrationRunStatuses } from "@/shared/orchestration";
+
 import {
   animationProviders,
   artifactProviders,
@@ -635,4 +637,60 @@ export const commentAnalysisRelations = relations(
       references: [candidates.id],
     }),
   }),
+);
+
+/**
+ * Persisted orchestration runs: one tracked pass of the six-agent demo
+ * sequence for one candidate. The row records identity and human intent —
+ * started, cancelled, failed-with-error — while step progress is always
+ * derived from the persisted agent_runs rows, so the planner can never
+ * disagree with the trace it observes. At most one run per candidate is
+ * active (RUNNING or FAILED); completed and cancelled runs are history.
+ */
+export const orchestrationRuns = sqliteTable(
+  "orchestration_runs",
+  {
+    id: text("id").primaryKey(),
+    candidateId: text("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    status: text("status", { enum: orchestrationRunStatuses })
+      .notNull()
+      .default("RUNNING"),
+    /** The planner cursor: first step not yet COMPLETE, null when done. */
+    currentStepKey: text("current_step_key", { enum: agentKeys }),
+    /** Safe failure classification when status is FAILED. */
+    errorCode: text("error_code"),
+    safeErrorMessage: text("safe_error_message"),
+    startedAt: timestamp("started_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+    /** Terminal time for COMPLETE and CANCELLED runs; FAILED stays open. */
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    uniqueIndex("orchestration_runs_candidate_active_unique")
+      .on(table.candidateId)
+      .where(sql`status IN ('RUNNING', 'FAILED')`),
+    index("orchestration_runs_candidate_id_idx").on(table.candidateId),
+    check(
+      "orchestration_runs_status_valid",
+      sql`${table.status} IN ('RUNNING', 'COMPLETE', 'FAILED', 'CANCELLED')`,
+    ),
+    check(
+      "orchestration_runs_current_step_valid",
+      sql`${table.currentStepKey} IS NULL OR ${table.currentStepKey} IN ('trend-scout', 'humor-analyst', 'yardtoonz-director', 'clay-artist', 'animator', 'qa-inspector')`,
+    ),
+    check(
+      "orchestration_runs_terminal_reported",
+      sql`(${table.status} IN ('COMPLETE', 'CANCELLED') AND ${table.completedAt} IS NOT NULL) OR (${table.status} IN ('RUNNING', 'FAILED') AND ${table.completedAt} IS NULL)`,
+    ),
+    check(
+      "orchestration_runs_failure_reports_error",
+      sql`(${table.status} = 'FAILED' AND ${table.errorCode} IS NOT NULL) OR (${table.status} != 'FAILED' AND ${table.errorCode} IS NULL)`,
+    ),
+    check(
+      "orchestration_runs_completed_after_started",
+      sql`${table.completedAt} IS NULL OR ${table.completedAt} >= ${table.startedAt}`,
+    ),
+  ],
 );
