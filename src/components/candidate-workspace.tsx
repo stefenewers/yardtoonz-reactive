@@ -17,6 +17,9 @@ import type { AnimationProvider, ImageProvider } from "@/lib/providers";
 import { BrandMark } from "@/components/brand-mark";
 import { CandidateDetail } from "@/components/candidate-detail";
 import { CandidateInbox } from "@/components/candidate-inbox";
+import { DemoActions } from "@/components/demo-actions";
+import { demoCandidateId } from "@/shared/demo";
+
 import { ProductionSetup } from "@/components/production-setup";
 import { ScoutHeaderAction } from "@/components/scout-header-action";
 
@@ -92,10 +95,13 @@ export function CandidateWorkspace({
     };
   }, []);
 
-  async function loadCandidates(requestedSort: InboxSortState = sort) {
+  async function loadCandidates(
+    requestedSort: InboxSortState = sort,
+  ): Promise<Candidate[]> {
     setRequestState("loading");
     setError(undefined);
     const observedAt = Date.now();
+
     try {
       const loaded = await client.listCandidates({
         sort: requestedSort.field,
@@ -104,6 +110,7 @@ export function CandidateWorkspace({
       setCandidates(loaded);
       setFetchedAt(observedAt);
       setRequestState("idle");
+      return loaded;
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -111,6 +118,7 @@ export function CandidateWorkspace({
           : "Candidates could not be loaded.",
       );
       setRequestState("error");
+      return [];
     }
   }
 
@@ -123,6 +131,19 @@ export function CandidateWorkspace({
     setSelected(candidate);
     setScreen("review");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** One click: land on the pinned walkthrough candidate's review screen. */
+  async function openDemoCandidate() {
+    const loaded = await loadCandidates();
+    const demo = loaded.find((candidate) => candidate.id === demoCandidateId);
+    if (demo) {
+      openCandidate(demo);
+      return;
+    }
+    setError(
+      `The pinned demo candidate (${demoCandidateId}) is missing from the seeded set. Reset the demo data and try again.`,
+    );
   }
 
   /** One persisted decision lands in the detail view and the inbox row alike. */
@@ -291,6 +312,12 @@ export function CandidateWorkspace({
             <ProviderDisclosure
               imageProvider={imageProvider}
               animationProvider={animationProvider}
+            />
+
+            <DemoActions
+              busy={busy}
+              onUseDemoCandidate={() => void openDemoCandidate()}
+              onReset={() => void loadCandidates()}
             />
 
             <CandidateInbox

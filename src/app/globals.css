@@ -2441,3 +2441,47 @@ input:focus-visible {
     top: -1.1rem;
   }
 }
+
+/* Demo wow layer */
+
+.thumbnail-frame {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+.demo-panel {
+  display: grid;
+  gap: 0.875rem;
+  margin-top: 1rem;
+  padding: 1rem 1.125rem;
+  border: 2px solid var(--outline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--outline);
+}
+
+.demo-panel-row {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+
+.demo-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.demo-hint code {
+  font-size: 0.78rem;
+}
+
+.field-hint {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * The demo spine: the pinned walkthrough candidate, the committed
  * owner-cleared source clip, its sampled keyframes, and the recorded
@@ -33,3 +35,13 @@ export const fallbackOutput = {
   description:
     "Captured from a successful mock run on the demo clip. Shown only when this job fails, so the demo can keep going.",
 } as const;
+
+/** Guarded demo reset (rehearsal) response. */
+export const demoResetResponseSchema = z
+  .object({
+    reset: z.object({
+      seededCandidates: z.number().int().nonnegative(),
+    }),
+  })
+  .readonly();
+export type DemoResetResponse = z.infer<typeof demoResetResponseSchema>;

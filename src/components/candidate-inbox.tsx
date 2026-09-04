@@ -15,6 +15,8 @@ import {
   type InboxSortState,
 } from "@/domain/inbox";
 
+import { demoKeyframesFor } from "@/shared/demo";
+
 export interface CandidateInboxProps {
   candidates: Candidate[];
   loading: boolean;
@@ -163,13 +165,23 @@ function CandidateRow({
     explanation: overallExplanation,
     inputsUsed: [],
   };
+  const keyframes = demoKeyframesFor(candidate.id);
 
   return (
     <tr className="candidate-row">
       <td className="rank-cell">#{rank}</td>
       <td className="source-cell">
         <span className="thumbnail" aria-hidden="true">
-          {platformLabels[candidate.platform].slice(0, 2)}
+          {keyframes.length > 0 ? (
+            <img
+              src={keyframes[0]}
+              alt=""
+              className="thumbnail-frame"
+              loading="lazy"
+            />
+          ) : (
+            platformLabels[candidate.platform].slice(0, 2)
+          )}
         </span>
         <span className="source-copy">
           <small>
