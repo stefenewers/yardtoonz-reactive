@@ -3,8 +3,8 @@
 # YardToonz Reactive — Build and Demo Runbook
 
 **Status:** Draft for human approval  
-**Version:** 1.1  
-**Date:** 2026-09-03 (v1.1 records observed behavior from the E6.3 mock-mode hardening and demo rehearsal on this date; sections 8, 9, 11, and 12 were reconciled with the implemented product)  
+**Version:** 1.2  
+**Date:** 2026-09-04 (v1.2 records observed behavior from the agentic nine-beat walkthrough and its two consecutive rehearsal passes; v1.1 recorded the E6.3 mock-mode hardening and demo rehearsal of 2026-09-03)  
 **Event:** Obvious Frontier Build Atlanta  
 **Demo objective:** Produce one traceable, downloadable Yard Toonz cartoon from an approved candidate
 
@@ -218,6 +218,8 @@ Observed verification (all confirmed this date):
 
 Observed UI labels and behavior (2026-09-03, mock mode): "Load demo candidates" seeds the inbox; the ranked table sorts by overall score; the candidate detail screen presents Viral momentum, Humor response, and Yard Toonz fit with explanations; "Approve for production" opens the rights gate; "Confirm rights and continue" requires the authorization checkbox; "Start production" uploads and validates the MP4; the Job monitor shows the "Production stage timeline" with per-stage elapsed time plus "Image provider: Mock" and "Animation provider: Mock"; completion lands on "Output review" with the seven-artifact lineage list, probed output facts, "Approve output", and the final MP4 download. In mock mode the full pipeline completes in about ten seconds, so the live job finishes comfortably inside the presentation window — the recorded-completion fallback below remains for live-provider runs.
 
+Observed agentic layer (2026-09-04, mock mode): the candidate detail screen opens on the six-card Agent Control Center — Trend Scout and Humor Analyst show Complete from persisted intake runs. "Analyze humor now" reports the corpus as "10 comments · 6 with laughter markers" and completes the Humor Analyst card; "Create Director treatment" produces the treatment concept with Confidence, Provider Mock, and Model mock-deterministic-v1 attributed on the Director card, then hands off to "Media generation is gated." The job monitor adds Clay Artist, Animator, and QA Inspector cards that run to Complete with Mock attribution beside the per-stage timeline driven by the real worker. The output surfaces present the clay before/after pair, the audio-preserved output preview with probed facts, the seven-item artifact lineage, deterministic QA facts, and the attribution and caption package under the approved output. "Use demo candidate" and the demo-clip one-click path make the whole script drivable without local media.
+
 ### 0:00–0:30 — Problem and proof
 
 Open the candidate inbox.
@@ -289,6 +291,8 @@ Observed behavior: the reset is safe while `npm run start` keeps running. The we
 
 Verification record (E6.3 rehearsal, 2026-09-03, from `main` `ad1d307`): every item below was exercised on the implemented product — the full `npm run check` gate plus two complete browser walkthroughs (`tests/e2e/demo-walkthrough.spec.ts`, the second run immediately after `npm run demo:reset` with the web server still running).
 
+Agentic rehearsal record (2026-09-04, branch `feat/agentic-walkthrough`): `tests/e2e/demo-walkthrough.spec.ts` drives all nine demo beats end-to-end in one browser flow with the real worker and the committed owner-cleared demo clip — ranked inbox, one-click demo candidate, humor analysis, Director treatment with provider/model attribution, rights confirmation, treatment-driven 0–6 s segment, real-worker production to COMPLETE, the complete media-agent timeline, the claymation before/after reveal, the audio-preserved output preview (360 × 640, H264, audio Present), a deterministic QA report (no FAIL, score ≥ 90), and MP4 plus caption-package downloads (MP4 probed 360 × 640, h264 + aac). Two consecutive full rehearsal passes after `npm run demo:reset` produced identical green results (19.3 s and 19.2 s), with per-beat screenshots and a full-flow WebM recording captured for both passes. Two trace-attribution gaps surfaced by the walkthrough were fixed at the root and are now certified behavior: Director trace rows record the treatment model (`mock-deterministic-v1`) instead of "Not disclosed", and the Agent Control Center fetches one final trace when a job turns terminal so the media cards land Complete instead of freezing on the last mid-run poll.
+
 - [x] Ten candidates load from seeded data or CSV. — `GET /api/candidates` returns 10 after every `demo:reset`; the walkthrough asserts "10 candidates" in the inbox.
 - [x] Three component scores and explanations display separately. — each score carries its own `score`, `explanation`, and `inputsUsed`; the candidate detail screen shows Viral momentum, Humor response, and Yard Toonz fit as separate sections.
 - [x] Candidate approval persists. — decisions are stored in the database and survive reload and restart; the walkthrough restores and re-approves the owned candidate across runs.
@@ -301,7 +305,7 @@ Verification record (E6.3 rehearsal, 2026-09-03, from `main` `ad1d307`): every i
 - [x] Artifact lineage is visible. — the Output review screen renders the seven-item "Artifact lineage from source to final video" list (source, extraction, keyframe, styled frame, animation, muxed audio, final video).
 - [x] Provider mode is disclosed. — the job monitor shows "Image provider: Mock" and "Animation provider: Mock" independently, and production records freeze `imageProvider`/`animationProvider` onto each job.
 - [x] Final output can be approved, rejected, and downloaded. — "Approve output" persists "Output approved"; the download test fetches the final MP4 through the artifact endpoint (200, `video/mp4`, probed above). Rejection is the same persisted-decision path.
-- [x] `npm run check` passes. — format, lint, typecheck, 285 unit/integration tests in 33 files, production build, and 4 E2E tests all pass (exit 0).
+- [x] `npm run check` passes. — format, lint, typecheck, 845 unit/integration tests in 74 test files, production build, and 4 E2E tests all pass (exit 0, observed 2026-09-04).
 - [x] No secrets are committed or exposed. — tracked tree and 500-commit history contain no secret patterns (only a unit-test placeholder value); browser bundle, server bundle, live web/worker logs, and all API responses (health, candidates, productions, artifact bytes) scanned with zero matches.
 - [x] All merged PRs received human review. — all 20 merged PRs were squash-merged by the owner's Obvious autobuild integration under the owner's standing merge-approval directive, after the owner approved the five source documents and the initiative decomposition; every merge required green CI.
 
