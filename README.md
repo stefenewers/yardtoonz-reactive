@@ -105,6 +105,12 @@ With the worker running, the report shows `worker: "fresh"` and `status: "ok"`. 
 
 Filesystem paths, raw process errors, and version output remain server-internal for every check.
 
+## Railway deployment
+
+Deployment is config-as-code: `railway.json` at the repository root pins the Nixpacks builder and a `npm run start:stack` start command that runs the media worker and the web server (`next start`) together in one service. Both processes share the same SQLite file and artifact directory on disk, so they must stay in one service. Drizzle migrations auto-apply when the database client boots (`migrate()` in `src/server/db/client.ts`), so no separate migration step runs at deploy time.
+
+A persistent volume must be attached in the Railway dashboard (Settings > Volumes, mount path `/app/.data`). The defaults in `src/lib/env-schema.ts` are volume-backed — `DATABASE_URL=file:./.data/yardtoonz.db` and `ARTIFACT_ROOT=./.data/artifacts` — so without the volume every redeploy starts with an empty database and artifact directory.
+
 ## Source documents
 
 Repository mirrors under `docs/` retain published Obvious artifact IDs so later implementation work can trace requirements to the exact source. The amendment supersedes only its named sections; every other requirement in the original artifacts remains authoritative.
