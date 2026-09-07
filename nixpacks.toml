@@ -1,5 +1,6 @@
 # Railway builds: better-sqlite3 needs node-gyp when its prebuilt binary
 # cannot be fetched; node-gyp requires Python, absent from the default
 # Nixpacks Node image (see failed deployment of e0d9b3e).
+# nixPkgs overrides rather than merges with the provider defaults, so nodejs is listed explicitly (see failed deployment beb4d11: "npm: command not found").
 [phases.setup]
-nixPkgs = ["python3"]
+nixPkgs = ["nodejs", "python3"]
