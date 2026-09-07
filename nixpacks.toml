@@ -1,0 +1,5 @@
+# Railway builds: better-sqlite3 needs node-gyp when its prebuilt binary
+# cannot be fetched; node-gyp requires Python, absent from the default
+# Nixpacks Node image (see failed deployment of e0d9b3e).
+[phases.setup]
+nixPkgs = ["python3"]

@@ -111,6 +111,8 @@ Deployment is config-as-code: `railway.json` at the repository root pins the Nix
 
 A persistent volume must be attached in the Railway dashboard (Settings > Volumes, mount path `/app/.data`). The defaults in `src/lib/env-schema.ts` are volume-backed — `DATABASE_URL=file:./.data/yardtoonz.db` and `ARTIFACT_ROOT=./.data/artifacts` — so without the volume every redeploy starts with an empty database and artifact directory.
 
+Builds include `python3` via `nixpacks.toml` for the better-sqlite3 node-gyp fallback.
+
 ## Source documents
 
 Repository mirrors under `docs/` retain published Obvious artifact IDs so later implementation work can trace requirements to the exact source. The amendment supersedes only its named sections; every other requirement in the original artifacts remains authoritative.
